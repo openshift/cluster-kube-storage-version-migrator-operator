@@ -224,8 +224,8 @@ github.com/onsi/ginkgo v1.8.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+W
 github.com/onsi/gomega v0.0.0-20170829124025-dcabb60a477c/go.mod h1:C1qb7wdrVGGVU+Z6iS04AVkA3Q65CEZX59MT0QO5uiA=
 github.com/onsi/gomega v1.5.0 h1:izbySO9zDPmjJ8rDjLvkA2zJHIo+HkYXHnf7eN7SSyo=
 github.com/onsi/gomega v1.5.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
-github.com/openshift/api v0.0.0-20191022143720-82b963da83b3 h1:EquxFAqM4enmRDtJF5AUiMAk69sNgI8qOi0D5FictxM=
-github.com/openshift/api v0.0.0-20191022143720-82b963da83b3/go.mod h1:dh9o4Fs58gpFXGSYfnVxGR9PnV53I8TW84pQaJDdGiY=
+github.com/openshift/api v0.0.0-20191022190523-468faf516d2e h1:bYioIJ+kG+YF8xrv0BDGaghygnkM/ZULWbJUaEqt4RY=
+github.com/openshift/api v0.0.0-20191022190523-468faf516d2e/go.mod h1:dh9o4Fs58gpFXGSYfnVxGR9PnV53I8TW84pQaJDdGiY=
 github.com/openshift/client-go v0.0.0-20191022152013-2823239d2298 h1:wg5VfVIEtKI0yaBNeHNM1N01EjwTGg7JW0Gp+jqnYGQ=
 github.com/openshift/client-go v0.0.0-20191022152013-2823239d2298/go.mod h1:6rzn+JTr7+WYS2E1TExP4gByoABxMznR6y2SnUIkmxk=
 github.com/openshift/library-go v0.0.0-20191022102319-a308f2050b15 h1:WX+bY1m1amyDwBXcBV5zjXCK1tGy3TIq1T4iHnePzPk=
@@ -413,8 +413,8 @@ k8s.io/api v0.0.0-20190918155943-95b840bb6a1f h1:8FRUST8oUkEI45WYKyD8ed7Ad0Kg5v1
 k8s.io/api v0.0.0-20190918155943-95b840bb6a1f/go.mod h1:uWuOHnjmNrtQomJrvEBg0c0HRNyQ+8KTEERVsK0PW48=
 k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783 h1:V6ndwCPoao1yZ52agqOKaUAl7DYWVGiXjV7ePA2i610=
 k8s.io/apiextensions-apiserver v0.0.0-20190918161926-8f644eb6e783/go.mod h1:xvae1SZB3E17UpV59AWc271W/Ph25N+bjPyR63X6tPY=
-k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655 h1:CS1tBQz3HOXiseWZu6ZicKX361CZLT97UFnnPx0aqBw=
-k8s.io/apimachinery v0.0.0-20190913080033-27d36303b655/go.mod h1:nL6pwRT8NgfF8TT68DBI8uEePRt89cSvoXUVqbkWHq4=
+k8s.io/apimachinery v0.0.0-20190912071828-27d36303b655 h1:vopKiWgGTTC9Aq1ligULSOjLRyhHcK5VNbu8oWHVrtw=
+k8s.io/apimachinery v0.0.0-20190912071828-27d36303b655/go.mod h1:nL6pwRT8NgfF8TT68DBI8uEePRt89cSvoXUVqbkWHq4=
 k8s.io/apiserver v0.0.0-20190918160949-bfa5e2e684ad h1:IMoNR9pilTBaCS5WpwWnAdmoVYVeXowOD3bLrwxIAtQ=
 k8s.io/apiserver v0.0.0-20190918160949-bfa5e2e684ad/go.mod h1:XPCXEwhjaFN29a8NldXA901ElnKeKLrLtREO9ZhFyhg=
 k8s.io/client-go v0.0.0-20190918160344-1fbdaa4c8d90 h1:mLmhKUm1X+pXu0zXMEzNsOF5E2kKFGe5o6BZBIIqA6A=
