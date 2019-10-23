@@ -74,6 +74,7 @@ spec:
           - '--alsologtostderr'
         args:
           - '--v=5'
+        terminationMessagePolicy: FallbackToLogsOnError
 `)
 
 func kubeStorageVersionMigratorDeploymentYamlBytes() ([]byte, error) {
