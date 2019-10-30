@@ -7,5 +7,5 @@ roleRef:
   name: cluster-admin
 subjects:
 - kind: ServiceAccount
-  namespace: kube-storage-version-migrator-operator
+  namespace: openshift-kube-storage-version-migrator-operator
   name: kube-storage-version-migrator-operator

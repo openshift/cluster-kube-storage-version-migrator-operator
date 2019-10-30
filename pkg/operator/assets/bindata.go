@@ -68,13 +68,12 @@ spec:
       serviceAccountName: kube-storage-version-migrator-sa
       containers:
       - name: migrator
-        image: quay.io/sanchezl/storage-version-migration-migrator:v0.1
+        image: ${IMAGE}
         command:
           - /migrator
           - '--alsologtostderr'
-        args:
-          - '--v=5'
         terminationMessagePolicy: FallbackToLogsOnError
+        imagePullPolicy: Always
 `)
 
 func kubeStorageVersionMigratorDeploymentYamlBytes() ([]byte, error) {
@@ -115,52 +114,17 @@ func kubeStorageVersionMigratorNamespaceYaml() (*asset, error) {
 	return a, nil
 }
 
-var _kubeStorageVersionMigratorRolesYaml = []byte(`kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: storage-version-migration-migrator
-rules:
-- apiGroups: ["*"]
-  resources: ["*"]
-  verbs: ["get", "list", "update"]
-- apiGroups: ["migration.k8s.io"]
-  resources: ["storageversionmigrations"]
-  verbs: ["watch"]
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: storage-version-migration-crd-creator
-rules:
-- apiGroups: ["apiextensions.k8s.io"]
-  resources: ["customresourcedefinitions"]
-  verbs: ["create", "delete", "get"]
----
+var _kubeStorageVersionMigratorRolesYaml = []byte(`apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: storage-version-migration-migrator
-subjects:
-- kind: ServiceAccount
-  name: kube-storage-version-migrator-sa
-  namespace: openshift-kube-storage-version-migrator
 roleRef:
   kind: ClusterRole
-  name: storage-version-migration-migrator
-  apiGroup: rbac.authorization.k8s.io
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: storage-version-migration-crd-creator
+  name: cluster-admin
 subjects:
-- kind: ServiceAccount
-  name: kube-storage-version-migrator-sa
-  namespace: openshift-kube-storage-version-migrator
-roleRef:
-  kind: ClusterRole
-  name: storage-version-migration-crd-creator
-  apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: kube-storage-version-migrator-sa
+    namespace: openshift-kube-storage-version-migrator
 `)
 
 func kubeStorageVersionMigratorRolesYamlBytes() ([]byte, error) {
@@ -181,7 +145,7 @@ func kubeStorageVersionMigratorRolesYaml() (*asset, error) {
 var _kubeStorageVersionMigratorServiceaccountYaml = []byte(`apiVersion: v1
 kind: ServiceAccount
 metadata:
-  namespace: openshift-apiserver
+  namespace: openshift-kube-storage-version-migrator
   name: kube-storage-version-migrator-sa
 `)
 

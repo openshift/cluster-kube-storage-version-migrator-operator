@@ -155,7 +155,12 @@ func (c *TargetController) manageKubeStorageVersionManagerDeployment(spec *opera
 	deployment := resourceread.ReadDeploymentV1OrDie(assets.MustAsset("kube-storage-version-migrator/deployment.yaml"))
 
 	// resolve image references
-	if err := c.resolveImageReferences(deployment.Spec.Template.Spec.InitContainers, deployment.Spec.Template.Spec.Containers); err != nil {
+	var err error
+	templateSpec := &deployment.Spec.Template.Spec
+	if templateSpec.InitContainers, err = c.resolveImageReferences(templateSpec.InitContainers); err != nil {
+		return nil, false, err
+	}
+	if templateSpec.Containers, err = c.resolveImageReferences(templateSpec.Containers); err != nil {
 		return nil, false, err
 	}
 
@@ -170,25 +175,25 @@ func (c *TargetController) manageKubeStorageVersionManagerDeployment(spec *opera
 	operandContainer := deployment.Spec.Template.Spec.Containers[0]
 	operandContainer.Args = append(operandContainer.Args, fmt.Sprintf("--v=%d", klogLevels[spec.LogLevel]))
 
-	return resourceapply.ApplyDeployment(nil, c.eventRecorder, deployment, resourcemerge.ExpectedDeploymentGeneration(deployment, status.Generations), false)
+	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, deployment, resourcemerge.ExpectedDeploymentGeneration(deployment, status.Generations), false)
 }
 
-func (c *TargetController) resolveImageReferences(containerss ...[]corev1.Container) error {
-	for _, containers := range containerss {
-		for _, container := range containers {
-			switch container.Image {
-			case "${IMAGE}":
-				container.Image = c.imagePullSpec
-			case "${OPERATOR_IMAGE}":
-				container.Image = c.operatorImagePullSpec
-			default:
-				if strings.Contains(container.Image, "$") {
-					return fmt.Errorf("invalid image reference %q", container.Image)
-				}
+func (c *TargetController) resolveImageReferences(containers []corev1.Container) ([]corev1.Container, error) {
+	var results []corev1.Container
+	for _, container := range containers {
+		switch container.Image {
+		case "${IMAGE}":
+			container.Image = c.imagePullSpec
+		case "${OPERATOR_IMAGE}":
+			container.Image = c.operatorImagePullSpec
+		default:
+			if strings.Contains(container.Image, "$") {
+				return containers, fmt.Errorf("invalid image reference %q", container.Image)
 			}
 		}
+		results = append(results, container)
 	}
-	return nil
+	return results, nil
 }
 
 var klogLevels = map[operatorv1.LogLevel]int{
