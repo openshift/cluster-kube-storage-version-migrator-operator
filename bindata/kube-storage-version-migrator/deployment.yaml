@@ -18,10 +18,9 @@ spec:
       serviceAccountName: kube-storage-version-migrator-sa
       containers:
       - name: migrator
-        image: quay.io/sanchezl/storage-version-migration-migrator:v0.1
+        image: ${IMAGE}
         command:
           - /migrator
           - '--alsologtostderr'
-        args:
-          - '--v=5'
         terminationMessagePolicy: FallbackToLogsOnError
+        imagePullPolicy: Always

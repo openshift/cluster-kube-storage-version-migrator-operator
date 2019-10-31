@@ -6,7 +6,7 @@ require (
 	github.com/certifi/gocertifi v0.0.0-20190905060710-a5e0173ced67 // indirect
 	github.com/getsentry/raven-go v0.2.0 // indirect
 	github.com/jteeuwen/go-bindata v3.0.8-0.20151023091102-a0ff2567cfb7+incompatible
-	github.com/openshift/api v0.0.0-20191022143720-82b963da83b3
+	github.com/openshift/api v3.9.1-0.20191029170136-d752785a7d26+incompatible
 	github.com/openshift/client-go v0.0.0-20191022152013-2823239d2298
 	github.com/openshift/library-go v0.0.0-20191022102319-a308f2050b15
 	github.com/pkg/profile v1.3.0 // indirect

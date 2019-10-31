@@ -1,12 +1,12 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  namespace: kube-storage-version-migrator-operator
+  namespace: openshift-kube-storage-version-migrator-operator
   name: kube-storage-version-migrator-operator
   labels:
     app: kube-storage-version-migrator-operator
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate
   selector:
@@ -22,26 +22,42 @@ spec:
       containers:
       - name: kube-storage-version-migrator-operator
         terminationMessagePolicy: FallbackToLogsOnError
-        image: quay.io/sanchezl/storage-version-migration-migrator:v0.1
-        imagePullPolicy: IfNotPresent
+        image: quay.io/sanchezl/origin-cluster-kube-storage-version-migrator-operator:4.3
+        imagePullPolicy: Always
         ports:
         - containerPort: 8443
           name: metrics
           protocol: TCP
-        command: ["cluster-kube-storage-version-migrator-operator", "start"]
+        command:
+          - "cluster-kube-storage-version-migrator-operator"
+          - "start"
+          - "--config=/var/run/configmaps/config/config.yaml"
         resources:
           requests:
             memory: 50Mi
             cpu: 10m
+        volumeMounts:
+          - mountPath: /var/run/configmaps/config
+            name: config
+          - mountPath: /var/run/secrets/serving-cert
+            name: serving-cert
         env:
         - name: IMAGE
           value: quay.io/sanchezl/storage-version-migration-migrator:v0.1
         - name: OPERATOR_IMAGE
-          value: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.3
+          value: quay.io/sanchezl/origin-cluster-kube-storage-version-migrator-operator:v4.3
         - name: OPERATOR_IMAGE_VERSION
           value: "0.0.1-snapshot"
         - name: OPERAND_IMAGE_VERSION
           value: "0.0.1-snapshot"
+      volumes:
+        - name: serving-cert
+          secret:
+            secretName: serving-cert
+            optional: true
+        - name: config
+          configMap:
+            name: config
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: "system-cluster-critical"
