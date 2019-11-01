@@ -24,3 +24,18 @@ func TestOperatorNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestOperandNamespace(t *testing.T) {
+	kubeConfig, err := library.NewClientConfigForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = kubeClient.CoreV1().Namespaces().Get(operator.TargetNamespace, metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

@@ -1,7 +1,4 @@
-all: build
-.PHONY: all
-
-# Include the library makefile
+# Include the library makefiles
 include $(addprefix ./vendor/github.com/openshift/library-go/alpha-build-machinery/make/, \
 	golang.mk \
 	targets/openshift/bindata.mk \
@@ -23,4 +20,3 @@ GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 .PHONY: test-e2e
 test-e2e: GO_TEST_PACKAGES :=./test/e2e/...
 test-e2e: test-unit
-

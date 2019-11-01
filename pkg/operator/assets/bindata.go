@@ -70,10 +70,14 @@ spec:
       - name: migrator
         image: ${IMAGE}
         command:
-          - /migrator
+          - migrator
           - '--alsologtostderr'
+          - '--v=2'
         terminationMessagePolicy: FallbackToLogsOnError
-        imagePullPolicy: Always
+        resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
 `)
 
 func kubeStorageVersionMigratorDeploymentYamlBytes() ([]byte, error) {
