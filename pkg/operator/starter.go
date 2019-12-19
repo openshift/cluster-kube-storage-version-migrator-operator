@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -27,25 +28,25 @@ const (
 	TargetNamespace   = "kube-storage-version-migrator"
 )
 
-func RunOperator(ctx *controllercmd.ControllerContext) error {
+func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
 
-	kubeClient, err := kubernetes.NewForConfig(ctx.ProtoKubeConfig)
+	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
 	}
 
-	configClient, err := configv1client.NewForConfig(ctx.KubeConfig)
+	configClient, err := configv1client.NewForConfig(cc.KubeConfig)
 	if err != nil {
 		return err
 	}
 
-	operatorConfigClient, err := operatorv1client.NewForConfig(ctx.KubeConfig)
+	operatorConfigClient, err := operatorv1client.NewForConfig(cc.KubeConfig)
 	if err != nil {
 		return err
 	}
 
 	genericOperatorConfigClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(
-		ctx.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
+		cc.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
 	if err != nil {
 		return err
 	}
@@ -67,7 +68,7 @@ func RunOperator(ctx *controllercmd.ControllerContext) error {
 		operatorConfigClient.KubeStorageVersionMigrators(),
 		os.Getenv("IMAGE"),
 		os.Getenv("OPERATOR_IMAGE"),
-		ctx.EventRecorder,
+		cc.EventRecorder,
 		versionRecorder,
 	)
 
@@ -84,17 +85,17 @@ func RunOperator(ctx *controllercmd.ControllerContext) error {
 		configInformers.Config().V1().ClusterOperators(),
 		genericOperatorConfigClient,
 		versionRecorder,
-		ctx.EventRecorder,
+		cc.EventRecorder,
 	)
 
-	loggingController := loglevel.NewClusterOperatorLoggingController(genericOperatorConfigClient, ctx.EventRecorder)
+	loggingController := loglevel.NewClusterOperatorLoggingController(genericOperatorConfigClient, cc.EventRecorder)
 
 	configInformers.Start(ctx.Done())
 	dynamicInformers.Start(ctx.Done())
 
-	go statusController.Run(1, ctx.Done())
+	go statusController.Run(ctx, 1)
 	go targetController.Run(1, ctx.Done())
-	go loggingController.Run(1, ctx.Done())
+	go loggingController.Run(ctx, 1)
 
 	<-ctx.Done()
 	return fmt.Errorf("stopped")
