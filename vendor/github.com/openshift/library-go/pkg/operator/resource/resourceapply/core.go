@@ -39,7 +39,7 @@ func ApplyNamespace(client coreclientv1.NamespacesGetter, recorder events.Record
 	}
 
 	if klog.V(4) {
-		klog.Infof("Namespace %q changes: %v", required.Name, JSONPatch(existing, existingCopy))
+		klog.Infof("Namespace %q changes: %v", required.Name, JSONPatchNoError(existing, existingCopy))
 	}
 
 	actual, err := client.Namespaces().Update(existingCopy)
@@ -82,7 +82,7 @@ func ApplyService(client coreclientv1.ServicesGetter, recorder events.Recorder, 
 	existingCopy.Spec.Type = required.Spec.Type // if this is different, the update will fail.  Status will indicate it.
 
 	if klog.V(4) {
-		klog.Infof("Service %q changes: %v", required.Namespace+"/"+required.Name, JSONPatch(existing, required))
+		klog.Infof("Service %q changes: %v", required.Namespace+"/"+required.Name, JSONPatchNoError(existing, required))
 	}
 
 	actual, err := client.Services(required.Namespace).Update(existingCopy)
@@ -111,7 +111,7 @@ func ApplyPod(client coreclientv1.PodsGetter, recorder events.Recorder, required
 	}
 
 	if klog.V(4) {
-		klog.Infof("Pod %q changes: %v", required.Namespace+"/"+required.Name, JSONPatch(existing, required))
+		klog.Infof("Pod %q changes: %v", required.Namespace+"/"+required.Name, JSONPatchNoError(existing, required))
 	}
 
 	actual, err := client.Pods(required.Namespace).Update(existingCopy)
@@ -139,7 +139,7 @@ func ApplyServiceAccount(client coreclientv1.ServiceAccountsGetter, recorder eve
 		return existingCopy, false, nil
 	}
 	if klog.V(4) {
-		klog.Infof("ServiceAccount %q changes: %v", required.Namespace+"/"+required.Name, JSONPatch(existing, required))
+		klog.Infof("ServiceAccount %q changes: %v", required.Namespace+"/"+required.Name, JSONPatchNoError(existing, required))
 	}
 	actual, err := client.ServiceAccounts(required.Namespace).Update(existingCopy)
 	reportUpdateEvent(recorder, required, err)
@@ -200,7 +200,7 @@ func ApplyConfigMap(client coreclientv1.ConfigMapsGetter, recorder events.Record
 		details = fmt.Sprintf("cause by changes in %v", strings.Join(modifiedKeys, ","))
 	}
 	if klog.V(4) {
-		klog.Infof("ConfigMap %q changes: %v", required.Namespace+"/"+required.Name, JSONPatch(existing, required))
+		klog.Infof("ConfigMap %q changes: %v", required.Namespace+"/"+required.Name, JSONPatchNoError(existing, required))
 	}
 	reportUpdateEvent(recorder, required, err, details)
 	return actual, true, err
@@ -222,23 +222,54 @@ func ApplySecret(client coreclientv1.SecretsGetter, recorder events.Recorder, re
 		return nil, false, err
 	}
 
-	modified := resourcemerge.BoolPtr(false)
 	existingCopy := existing.DeepCopy()
 
-	resourcemerge.EnsureObjectMeta(modified, &existingCopy.ObjectMeta, required.ObjectMeta)
+	resourcemerge.EnsureObjectMeta(resourcemerge.BoolPtr(false), &existingCopy.ObjectMeta, required.ObjectMeta)
 
-	dataSame := equality.Semantic.DeepEqual(existingCopy.Data, required.Data)
-	if dataSame && !*modified {
-		return existingCopy, false, nil
+	switch required.Type {
+	case corev1.SecretTypeServiceAccountToken:
+		// Secrets for ServiceAccountTokens will have data injected by kube controller manager.
+		// We will apply only the explicitly set keys.
+		if existingCopy.Data == nil {
+			existingCopy.Data = map[string][]byte{}
+		}
+
+		for k, v := range required.Data {
+			existingCopy.Data[k] = v
+		}
+
+	default:
+		existingCopy.Data = required.Data
 	}
-	existingCopy.Data = required.Data
+
+	existingCopy.Type = required.Type
+
+	if equality.Semantic.DeepEqual(existingCopy, existing) {
+		return existing, false, nil
+	}
 
 	if klog.V(4) {
-		klog.Infof("Secret %s/%s changes: %v", required.Namespace, required.Name, JSONPatchSecret(existing, required))
+		klog.Infof("Secret %s/%s changes: %v", required.Namespace, required.Name, JSONPatchSecretNoError(existing, existingCopy))
 	}
 	actual, err := client.Secrets(required.Namespace).Update(existingCopy)
+	reportUpdateEvent(recorder, existingCopy, err)
 
-	reportUpdateEvent(recorder, required, err)
+	if err == nil {
+		return actual, true, err
+	}
+	if !strings.Contains(err.Error(), "field is immutable") {
+		return actual, true, err
+	}
+
+	// if the field was immutable on a secret, we're going to be stuck until we delete it.  Try to delete and then create
+	deleteErr := client.Secrets(required.Namespace).Delete(existingCopy.Name, nil)
+	reportDeleteEvent(recorder, existingCopy, deleteErr)
+
+	// clear the RV and track the original actual and error for the return like our create value.
+	existingCopy.ResourceVersion = ""
+	actual, err = client.Secrets(required.Namespace).Create(existingCopy)
+	reportCreateEvent(recorder, existingCopy, err)
+
 	return actual, true, err
 }
 
