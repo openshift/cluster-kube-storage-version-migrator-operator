@@ -8,6 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	appsv1informers "k8s.io/client-go/informers/apps/v1"
+	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -36,16 +38,19 @@ type TargetController struct {
 
 	eventRecorder   events.Recorder
 	versionRecorder status.VersionGetter
-	queue           workqueue.RateLimitingInterface
+
+	queue        workqueue.RateLimitingInterface
+	cachesToSync []cache.InformerSynced
 }
 
 func NewTargetController(kubeClient kubernetes.Interface,
 	genericOperatorConfigClient v1helpers.OperatorClient,
 	operatorConfigClient operatorv1client.KubeStorageVersionMigratorInterface,
+	secretInformer corev1informers.SecretInformer,
+	deploymentInformer appsv1informers.DeploymentInformer,
 	imagePullSpec, operatorImagePullSpec string,
 	eventRecorder events.Recorder,
-	versionRecorder status.VersionGetter,
-) *TargetController {
+	versionRecorder status.VersionGetter) *TargetController {
 	controller := &TargetController{
 		kubeClient:                  kubeClient,
 		genericOperatorConfigClient: genericOperatorConfigClient,
@@ -58,6 +63,14 @@ func NewTargetController(kubeClient kubernetes.Interface,
 	}
 
 	genericOperatorConfigClient.Informer().AddEventHandler(controller.eventHandler())
+	secretInformer.Informer().AddEventHandler(controller.eventHandler())
+	deploymentInformer.Informer().AddEventHandler(controller.eventHandler())
+
+	controller.cachesToSync = append(controller.cachesToSync,
+		genericOperatorConfigClient.Informer().HasSynced,
+		deploymentInformer.Informer().HasSynced,
+		secretInformer.Informer().HasSynced,
+	)
 
 	return controller
 }
@@ -81,7 +94,7 @@ func (c *TargetController) sync() error {
 	default:
 	}
 
-	forceRequeue, err := c.syncKubeStorageVersionManager(spec, status, objectMetaGeneration)
+	forceRequeue, err := c.syncKubeStorageVersionMigrator(spec, status, objectMetaGeneration)
 	if forceRequeue && err != nil {
 		c.queue.AddRateLimited(workQueueKey)
 	}
@@ -95,6 +108,9 @@ func (c *TargetController) Run(workers int, stopCh <-chan struct{}) {
 
 	klog.Infof("Starting KubeStorageVersionMigratorOperator")
 	defer klog.Infof("Shutting down KubeStorageVersionMigratorOperator")
+	if !cache.WaitForCacheSync(stopCh, c.cachesToSync...) {
+		return
+	}
 
 	// doesn't matter what workers say, only start one.
 	go wait.Until(c.runWorker, time.Second, stopCh)

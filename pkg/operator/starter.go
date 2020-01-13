@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -25,7 +26,7 @@ import (
 
 const (
 	OperatorNamespace = "openshift-kube-storage-version-migrator-operator"
-	TargetNamespace   = "kube-storage-version-migrator"
+	TargetNamespace   = "openshift-kube-storage-version-migrator"
 )
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
@@ -60,12 +61,17 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	for _, version := range clusterOperator.Status.Versions {
 		versionRecorder.SetVersion(version.Name, version.Version)
 	}
-	versionRecorder.SetVersion("operator", os.Getenv("OPERATOR_IMAGE_VERSION"))
+	versionRecorder.SetVersion("operator", status.VersionForOperatorFromEnv())
 
+	kubeInformersForTargetNamespace := informers.NewSharedInformerFactoryWithOptions(kubeClient, 10*time.Minute,
+		informers.WithNamespace(TargetNamespace),
+	)
 	targetController := targetcontroller.NewTargetController(
 		kubeClient,
 		genericOperatorConfigClient,
 		operatorConfigClient.KubeStorageVersionMigrators(),
+		kubeInformersForTargetNamespace.Core().V1().Secrets(),
+		kubeInformersForTargetNamespace.Apps().V1().Deployments(),
 		os.Getenv("IMAGE"),
 		os.Getenv("OPERATOR_IMAGE"),
 		cc.EventRecorder,
@@ -92,6 +98,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	configInformers.Start(ctx.Done())
 	dynamicInformers.Start(ctx.Done())
+	kubeInformersForTargetNamespace.Start(ctx.Done())
 
 	go statusController.Run(ctx, 1)
 	go targetController.Run(1, ctx.Done())

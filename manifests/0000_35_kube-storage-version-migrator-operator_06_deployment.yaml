@@ -6,7 +6,7 @@ metadata:
   labels:
     app: kube-storage-version-migrator-operator
 spec:
-  replicas: 0
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -22,8 +22,7 @@ spec:
       containers:
       - name: kube-storage-version-migrator-operator
         terminationMessagePolicy: FallbackToLogsOnError
-        image: quay.io/sanchezl/origin-cluster-kube-storage-version-migrator-operator:4.3
-        imagePullPolicy: Always
+        image: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.4
         ports:
         - containerPort: 8443
           name: metrics
@@ -43,9 +42,9 @@ spec:
             name: serving-cert
         env:
         - name: IMAGE
-          value: quay.io/sanchezl/storage-version-migration-migrator:v0.1
+          value: quay.io/openshift/origin-kube-storage-version-migrator:v4.4
         - name: OPERATOR_IMAGE
-          value: quay.io/sanchezl/origin-cluster-kube-storage-version-migrator-operator:v4.3
+          value: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.4
         - name: OPERATOR_IMAGE_VERSION
           value: "0.0.1-snapshot"
         - name: OPERAND_IMAGE_VERSION

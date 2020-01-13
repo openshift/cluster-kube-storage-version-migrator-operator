@@ -17,7 +17,7 @@ import (
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
 )
 
-func (c *TargetController) syncKubeStorageVersionManager(spec *operatorv1.KubeStorageVersionMigratorSpec, originalOperatorStatus *operatorv1.KubeStorageVersionMigratorStatus, generation int64) (bool, error) {
+func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeStorageVersionMigratorSpec, originalOperatorStatus *operatorv1.KubeStorageVersionMigratorStatus, generation int64) (bool, error) {
 	var errors []error
 	operatorStatus := originalOperatorStatus.DeepCopy()
 
@@ -34,7 +34,7 @@ func (c *TargetController) syncKubeStorageVersionManager(spec *operatorv1.KubeSt
 		}
 	}
 
-	deployment, _, err := c.manageKubeStorageVersionManagerDeployment(spec, operatorStatus)
+	deployment, _, err := c.manageKubeStorageVersionMigratorDeployment(spec, operatorStatus)
 	if err != nil {
 		errors = append(errors, fmt.Errorf("%q: %v", "deployments", err))
 	}
@@ -57,14 +57,21 @@ func (c *TargetController) syncKubeStorageVersionManager(spec *operatorv1.KubeSt
 		c.versionRecorder.SetVersion("kube-storage-version-migrator", operandVersion)
 	}
 
-	_, _, err = v1helpers.UpdateStatus(c.genericOperatorConfigClient, func(oldStatus *operatorv1.OperatorStatus) error {
-		for _, condition := range operatorStatus.Conditions {
-			if err := v1helpers.UpdateConditionFn(condition)(oldStatus); err != nil {
-				return err
-			}
-		}
+	// patch conditions, observedGenerations and Generation in the existing operation status
+	var updateStatusFuncs []v1helpers.UpdateStatusFunc
+	for _, condition := range operatorStatus.Conditions {
+		updateStatusFuncs = append(updateStatusFuncs, v1helpers.UpdateConditionFn(condition))
+	}
+	updateStatusFuncs = append(updateStatusFuncs, func(oldStatus *operatorv1.OperatorStatus) error {
+		oldStatus.ObservedGeneration = operatorStatus.ObservedGeneration
 		return nil
 	})
+	updateStatusFuncs = append(updateStatusFuncs, func(oldStatus *operatorv1.OperatorStatus) error {
+		oldStatus.Generations = operatorStatus.Generations
+		return nil
+	})
+
+	_, _, err = v1helpers.UpdateStatus(c.genericOperatorConfigClient, updateStatusFuncs...)
 	if err != nil {
 		return false, err
 	}
@@ -86,6 +93,7 @@ func (c *TargetController) syncKubeStorageVersionManager(spec *operatorv1.KubeSt
 }
 
 func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operatorv1.KubeStorageVersionMigratorStatus) {
+
 	switch {
 	case deployment == nil:
 		v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
@@ -100,6 +108,11 @@ func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operat
 			Status:  operatorv1.ConditionFalse,
 			Reason:  "NoMigratorPod",
 			Message: "deployment/migrator.openshift-kube-storage-version-migrator: no replicas are available",
+		})
+	default:
+		v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
+			Type:   operatorv1.OperatorStatusTypeAvailable,
+			Status: operatorv1.ConditionTrue,
 		})
 	}
 }
@@ -149,8 +162,7 @@ func manageOperatorStatusDegraded(errors []error, status *operatorv1.KubeStorage
 	}
 }
 
-func (c *TargetController) manageKubeStorageVersionManagerDeployment(spec *operatorv1.KubeStorageVersionMigratorSpec, status *operatorv1.KubeStorageVersionMigratorStatus) (*appsv1.Deployment, bool, error) {
-
+func (c *TargetController) manageKubeStorageVersionMigratorDeployment(spec *operatorv1.KubeStorageVersionMigratorSpec, status *operatorv1.KubeStorageVersionMigratorStatus) (*appsv1.Deployment, bool, error) {
 	// load deployment
 	deployment := resourceread.ReadDeploymentV1OrDie(assets.MustAsset("kube-storage-version-migrator/deployment.yaml"))
 

@@ -1,0 +1,12 @@
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+spec:
+  tags:
+  - name: cluster-kube-storage-version-migrator-operator
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.4
+  - name: kube-storage-version-migrator
+    from:
+      kind: DockerImage
+      name: quay.io/openshift/origin-kube-storage-version-migrator:v4.4
