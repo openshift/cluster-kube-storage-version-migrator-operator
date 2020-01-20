@@ -73,6 +73,8 @@ spec:
           - migrator
           - '--alsologtostderr'
           - '--v=2'
+          - '--kube-api-qps=30'
+          - '--kube-api-burst=40'
         terminationMessagePolicy: FallbackToLogsOnError
         resources:
             requests:
