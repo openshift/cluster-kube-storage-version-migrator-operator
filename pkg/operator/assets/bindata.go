@@ -100,7 +100,6 @@ kind: Namespace
 metadata:
   name: openshift-kube-storage-version-migrator
   labels:
-    openshift.io/run-level: "1"
     openshift.io/cluster-monitoring: "true"`)
 
 func kubeStorageVersionMigratorNamespaceYamlBytes() ([]byte, error) {
