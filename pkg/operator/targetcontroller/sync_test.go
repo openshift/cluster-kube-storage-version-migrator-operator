@@ -1,6 +1,7 @@
 package targetcontroller
 
 import (
+	"fmt"
 	v12 "github.com/openshift/api/operator/v1"
 	v1 "k8s.io/api/apps/v1"
 	v13 "k8s.io/api/core/v1"
@@ -66,6 +67,18 @@ func TestManageOperatorStatusProgressing(t *testing.T) {
 			ObservedGeneration: 1,
 		},
 	}
-	manageOperatorStatusProgressing(deployment, status, 1)
+	manageOperatorStatusProgressing(deployment, nil, status, 1)
+	t.Log(mergepatch.ToYAMLOrError(status))
+}
+
+func TestManageOperatorStatusProgressingSyncErr(t *testing.T) {
+	var errors []error
+	errors = append(errors, fmt.Errorf("syncErr"))
+	var statusTrue v12.ConditionStatus = "True"
+	status := &v12.KubeStorageVersionMigratorStatus{}
+	manageOperatorStatusProgressing(nil, errors, status, 1)
+	if status.OperatorStatus.Conditions[0].Status != statusTrue {
+		t.Errorf("Expected Progressing %v, got %v", statusTrue, status.OperatorStatus.Conditions[0].Status)
+	}
 	t.Log(mergepatch.ToYAMLOrError(status))
 }

@@ -40,7 +40,7 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	}
 
 	manageOperatorStatusAvailable(deployment, operatorStatus)
-	manageOperatorStatusProgressing(deployment, operatorStatus, generation)
+	manageOperatorStatusProgressing(deployment, errors, operatorStatus, generation)
 	manageOperatorStatusDegraded(errors, operatorStatus)
 
 	// TODO this is changing too early and it was before too.
@@ -77,7 +77,7 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	}
 
 	if len(errors) > 0 {
-		return true, nil
+		return true, fmt.Errorf("sync error")
 	}
 	if !v1helpers.IsOperatorConditionFalse(operatorStatus.Conditions, operatorv1.OperatorStatusTypeDegraded) {
 		return true, nil
@@ -117,11 +117,20 @@ func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operat
 	}
 }
 
-func manageOperatorStatusProgressing(deployment *appsv1.Deployment, status *operatorv1.KubeStorageVersionMigratorStatus, generation int64) {
+func manageOperatorStatusProgressing(deployment *appsv1.Deployment, errors []error, status *operatorv1.KubeStorageVersionMigratorStatus, generation int64) {
 	// If the deployment is up to date and the operatorConfig are up to date, then we are no longer progressing
 	var progressingMessages []string
+	if len(errors) > 0 {
+		for _, err := range errors {
+			if deployment == nil {
+				progressingMessages = append(progressingMessages, fmt.Sprintf("syncing openshift-kube-storage-version-migrator resources: %v", err.Error()))
+			} else {
+				progressingMessages = append(progressingMessages, fmt.Sprintf("deployment/migrator.openshift-kube-storage-version-migrator: %v", err.Error()))
+			}
+		}
+	}
 	if deployment != nil && deployment.ObjectMeta.Generation != deployment.Status.ObservedGeneration {
-		progressingMessages = append(progressingMessages, fmt.Sprintf("deployment/migrator.openshift-kube-storage-version-migrator:: observed generation is %d, desired generation is %d.", deployment.Status.ObservedGeneration, deployment.ObjectMeta.Generation))
+		progressingMessages = append(progressingMessages, fmt.Sprintf("deployment/migrator.openshift-kube-storage-version-migrator: observed generation is %d, desired generation is %d.", deployment.Status.ObservedGeneration, deployment.ObjectMeta.Generation))
 	}
 	if generation != status.ObservedGeneration {
 		progressingMessages = append(progressingMessages, fmt.Sprintf("kubestorageversionmigrators/cluster: observed generation is %d, desired generation is %d.", status.ObservedGeneration, generation))

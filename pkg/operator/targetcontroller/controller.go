@@ -95,7 +95,10 @@ func (c *TargetController) sync() error {
 	}
 
 	forceRequeue, err := c.syncKubeStorageVersionMigrator(spec, status, objectMetaGeneration)
-	if forceRequeue && err != nil {
+	if err != nil {
+		return err
+	}
+	if forceRequeue {
 		c.queue.AddRateLimited(workQueueKey)
 	}
 
