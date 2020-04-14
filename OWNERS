@@ -7,3 +7,4 @@ approvers:
   - deads2k
   - sttts
   - mfojtik
+component: kube-storage-version-migrator
