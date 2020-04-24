@@ -188,7 +188,7 @@ func (c *TargetController) manageKubeStorageVersionMigratorDeployment(spec *oper
 	operandContainer := deployment.Spec.Template.Spec.Containers[0]
 	operandContainer.Args = append(operandContainer.Args, fmt.Sprintf("--v=%d", klogLevels[spec.LogLevel]))
 
-	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, deployment, resourcemerge.ExpectedDeploymentGeneration(deployment, status.Generations), false)
+	return resourceapply.ApplyDeployment(c.kubeClient.AppsV1(), c.eventRecorder, deployment, resourcemerge.ExpectedDeploymentGeneration(deployment, status.Generations))
 }
 
 func (c *TargetController) resolveImageReferences(containers []corev1.Container) ([]corev1.Container, error) {
