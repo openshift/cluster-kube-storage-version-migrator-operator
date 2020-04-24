@@ -1,6 +1,7 @@
 package targetcontroller
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -76,7 +77,7 @@ func NewTargetController(kubeClient kubernetes.Interface,
 }
 
 func (c *TargetController) sync() error {
-	operatorConfig, err := c.operatorConfigClient.Get("cluster", metav1.GetOptions{})
+	operatorConfig, err := c.operatorConfigClient.Get(context.TODO(), "cluster", metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func (c *TargetController) sync() error {
 	case operatorv1.Unmanaged:
 		return nil
 	case operatorv1.Removed:
-		if err := c.kubeClient.CoreV1().Namespaces().Delete(TargetNamespace, nil); err != nil && !errors.IsNotFound(err) {
+		if err := c.kubeClient.CoreV1().Namespaces().Delete(context.TODO(), TargetNamespace, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
 		return nil
