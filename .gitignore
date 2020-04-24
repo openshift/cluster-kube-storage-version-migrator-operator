@@ -12,3 +12,6 @@
 *.out
 
 /cluster-kube-storage-version-migrator-operator
+
+# Log output from telepresence
+telepresence.log

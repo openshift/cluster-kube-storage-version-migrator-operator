@@ -4,6 +4,7 @@ include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	targets/openshift/bindata.mk \
 	targets/openshift/images.mk \
 	targets/openshift/deps.mk \
+	targets/openshift/operator/telepresence.mk \
 )
 
 # generate bindata targets
@@ -20,3 +21,8 @@ GO_TEST_PACKAGES :=./pkg/... ./cmd/...
 .PHONY: test-e2e
 test-e2e: GO_TEST_PACKAGES :=./test/e2e/...
 test-e2e: test-unit
+
+# Configure the 'telepresence' target
+# See vendor/github.com/openshift/build-machinery-go/scripts/run-telepresence.sh for usage and configuration details
+export TP_DEPLOYMENT_YAML ?=./manifests/0000_40_kube-storage-version-migrator-operator_07_deployment.yaml
+export TP_CMD_PATH ?=./cmd/cluster-kube-storage-version-migrator-operator
