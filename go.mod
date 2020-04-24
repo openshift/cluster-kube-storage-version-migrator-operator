@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
 	github.com/openshift/api v0.0.0-20200422085536-f24cbf292bdd
-	github.com/openshift/build-machinery-go v0.0.0-20200424080330-082bf86082cc
+	github.com/openshift/build-machinery-go v0.0.0-20200512074546-3744767c4131
 	github.com/openshift/client-go v0.0.0-20200422192633-6f6c07fc2a70
 	github.com/openshift/library-go v0.0.0-20200423145702-b0e5b39cd9e7
 	github.com/prometheus/client_golang v1.2.1
@@ -24,3 +24,5 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.18.2
 	k8s.io/component-base => k8s.io/component-base v0.18.2
 )
+
+replace github.com/openshift/build-machinery-go => github.com/marun/build-machinery-go v0.0.0-20200424210328-043c94998366
