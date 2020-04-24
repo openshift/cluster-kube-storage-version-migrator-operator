@@ -21,7 +21,8 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	var errors []error
 	operatorStatus := originalOperatorStatus.DeepCopy()
 
-	directResourceResults := resourceapply.ApplyDirectly(c.kubeClient, c.eventRecorder, assets.Asset,
+	clientHolder := (&resourceapply.ClientHolder{}).WithKubernetes(c.kubeClient)
+	directResourceResults := resourceapply.ApplyDirectly(clientHolder, c.eventRecorder, assets.Asset,
 		"kube-storage-version-migrator/namespace.yaml",
 		"kube-storage-version-migrator/serviceaccount.yaml",
 		"kube-storage-version-migrator/roles.yaml",
