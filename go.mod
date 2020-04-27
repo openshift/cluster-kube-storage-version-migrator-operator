@@ -3,8 +3,9 @@ module github.com/openshift/cluster-kube-storage-version-migrator-operator
 go 1.13
 
 require (
-	github.com/jteeuwen/go-bindata v3.0.8-0.20151023091102-a0ff2567cfb7+incompatible
+	github.com/go-bindata/go-bindata v3.1.1+incompatible
 	github.com/openshift/api v0.0.0-20191217141120-791af96035a5
+	github.com/openshift/build-machinery-go v0.0.0-20200424080330-082bf86082cc
 	github.com/openshift/client-go v0.0.0-20191216194936-57f413491e9e
 	github.com/openshift/library-go v0.0.0-20191218095328-1c12909e5923
 	github.com/prometheus/client_golang v1.2.1

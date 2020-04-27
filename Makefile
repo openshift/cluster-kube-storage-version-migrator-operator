@@ -1,5 +1,5 @@
 # Include the library makefiles
-include $(addprefix ./vendor/github.com/openshift/library-go/alpha-build-machinery/make/, \
+include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
 	targets/openshift/bindata.mk \
 	targets/openshift/images.mk \
