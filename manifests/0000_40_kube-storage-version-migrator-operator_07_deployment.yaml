@@ -27,9 +27,8 @@ spec:
         - containerPort: 8443
           name: metrics
           protocol: TCP
-        command:
-          - "cluster-kube-storage-version-migrator-operator"
-          - "start"
+        command: ["cluster-kube-storage-version-migrator-operator", "start"]
+        args:
           - "--config=/var/run/configmaps/config/config.yaml"
         resources:
           requests:
