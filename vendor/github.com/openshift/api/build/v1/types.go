@@ -35,7 +35,7 @@ type BuildSpec struct {
 
 	// triggeredBy describes which triggers started the most recent update to the
 	// build configuration and contains information about those triggers.
-	TriggeredBy []BuildTriggerCause `json:"triggeredBy" protobuf:"bytes,2,rep,name=triggeredBy"`
+	TriggeredBy []BuildTriggerCause `json:"triggeredBy,omitempty" protobuf:"bytes,2,rep,name=triggeredBy"`
 }
 
 // OptionalNodeSelector is a map that may also be left nil to distinguish between set and unset.
@@ -464,13 +464,13 @@ type ImageSource struct {
 	// does not reference an image source it is ignored. This field and paths may both be set, in which case
 	// the contents will be used twice.
 	// +optional
-	As []string `json:"as" protobuf:"bytes,4,rep,name=as"`
+	As []string `json:"as,omitempty" protobuf:"bytes,4,rep,name=as"`
 
 	// paths is a list of source and destination paths to copy from the image. This content will be copied
 	// into the build context prior to starting the build. If no paths are set, the build context will
 	// not be altered.
 	// +optional
-	Paths []ImageSourcePath `json:"paths" protobuf:"bytes,2,rep,name=paths"`
+	Paths []ImageSourcePath `json:"paths,omitempty" protobuf:"bytes,2,rep,name=paths"`
 
 	// pullSecret is a reference to a secret to be used to pull the image from a registry
 	// If the image is pulled from the OpenShift registry, this field does not need to be set.
@@ -615,6 +615,7 @@ type BuildStrategy struct {
 	CustomStrategy *CustomBuildStrategy `json:"customStrategy,omitempty" protobuf:"bytes,4,opt,name=customStrategy"`
 
 	// JenkinsPipelineStrategy holds the parameters to the Jenkins Pipeline build strategy.
+	// Deprecated: use OpenShift Pipelines
 	JenkinsPipelineStrategy *JenkinsPipelineBuildStrategy `json:"jenkinsPipelineStrategy,omitempty" protobuf:"bytes,5,opt,name=jenkinsPipelineStrategy"`
 }
 
@@ -690,9 +691,9 @@ const (
 
 // DockerBuildStrategy defines input parameters specific to container image build.
 type DockerBuildStrategy struct {
-	// from is reference to an DockerImage, ImageStreamTag, or ImageStreamImage from which
-	// the container image should be pulled
-	// the resulting image will be used in the FROM line of the Dockerfile for this build.
+	// from is a reference to an DockerImage, ImageStreamTag, or ImageStreamImage which overrides
+	// the FROM image in the Dockerfile for the build. If the Dockerfile uses multi-stage builds,
+	// this will replace the image in the last FROM directive of the file.
 	From *corev1.ObjectReference `json:"from,omitempty" protobuf:"bytes,1,opt,name=from"`
 
 	// pullSecret is the name of a Secret that would be used for setting up
@@ -760,6 +761,7 @@ type SourceBuildStrategy struct {
 }
 
 // JenkinsPipelineBuildStrategy holds parameters specific to a Jenkins Pipeline build.
+// Deprecated: use OpenShift Pipelines
 type JenkinsPipelineBuildStrategy struct {
 	// JenkinsfilePath is the optional path of the Jenkinsfile that will be used to configure the pipeline
 	// relative to the root of the context (contextDir). If both JenkinsfilePath & Jenkinsfile are
@@ -915,7 +917,8 @@ type BuildConfigSpec struct {
 	//triggers determine how new Builds can be launched from a BuildConfig. If
 	//no triggers are defined, a new build can only occur as a result of an
 	//explicit client build creation.
-	Triggers []BuildTriggerPolicy `json:"triggers" protobuf:"bytes,1,rep,name=triggers"`
+	// +optional
+	Triggers []BuildTriggerPolicy `json:"triggers,omitempty" protobuf:"bytes,1,rep,name=triggers"`
 
 	// RunPolicy describes how the new build created from this build
 	// configuration will be scheduled for execution.
@@ -1162,7 +1165,7 @@ type BuildRequest struct {
 
 	// triggeredBy describes which triggers started the most recent update to the
 	// build configuration and contains information about those triggers.
-	TriggeredBy []BuildTriggerCause `json:"triggeredBy" protobuf:"bytes,8,rep,name=triggeredBy"`
+	TriggeredBy []BuildTriggerCause `json:"triggeredBy,omitempty" protobuf:"bytes,8,rep,name=triggeredBy"`
 
 	// DockerStrategyOptions contains additional docker-strategy specific options for the build
 	DockerStrategyOptions *DockerStrategyOptions `json:"dockerStrategyOptions,omitempty" protobuf:"bytes,9,opt,name=dockerStrategyOptions"`

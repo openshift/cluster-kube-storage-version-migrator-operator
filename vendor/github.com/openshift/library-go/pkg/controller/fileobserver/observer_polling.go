@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/component-base/metrics"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/klog"
 )
 
@@ -55,7 +57,11 @@ func (o *pollingObserver) AddReactor(reaction ReactorFn, startingFileContent map
 			// in case the file does not exists but empty string is specified as initial content, without this
 			// the content will be hashed and reaction will trigger as if the content changed.
 			if len(startingContent) == 0 {
-				o.files[f] = fileHashAndState{exists: true}
+				var fileExists bool
+				if fileExists, err = isFile(f); err != nil {
+					panic(fmt.Sprintf("unexpected error while adding reactor for %#v: %v", files, err))
+				}
+				o.files[f] = fileHashAndState{exists: fileExists}
 				o.reactors[f] = append(o.reactors[f], reaction)
 				continue
 			}
@@ -114,6 +120,9 @@ func (o *pollingObserver) processReactors(stopCh <-chan struct{}) {
 					klog.Infof("Observed file %q has been modified (old=%q, new=%q)", filename, lastKnownFileState.hash, currentFileState.hash)
 					action = FileModified
 				}
+				// increment metrics counter for this file
+				observerActionsMetrics.WithLabelValues(filename, action.name()).Inc()
+				// execute the register reactor
 				if err := reactors[i](filename, action); err != nil {
 					klog.Errorf("Reactor for %q failed: %v", filename, err)
 				}
@@ -132,6 +141,19 @@ func (o *pollingObserver) processReactors(stopCh <-chan struct{}) {
 	}
 }
 
+var observerActionsMetrics = metrics.NewCounterVec(&metrics.CounterOpts{
+	Subsystem:      "fileobserver",
+	Name:           "action_count",
+	Help:           "Counter for every observed action for all monitored files",
+	StabilityLevel: metrics.ALPHA,
+}, []string{"name", "filename"})
+
+func init() {
+	(&sync.Once{}).Do(func() {
+		legacyregistry.MustRegister(observerActionsMetrics)
+	})
+}
+
 // Run will start a new observer.
 func (o *pollingObserver) Run(stopChan <-chan struct{}) {
 	klog.Info("Starting file observer")
@@ -147,14 +169,8 @@ type fileHashAndState struct {
 
 func calculateFileHash(path string) (fileHashAndState, error) {
 	result := fileHashAndState{}
-	stat, err := os.Stat(path)
-	if err != nil {
+	if exists, err := isFile(path); !exists || err != nil {
 		return result, err
-	}
-
-	// this is fatal
-	if stat.IsDir() {
-		return result, fmt.Errorf("you can watch only files, %s is a directory", path)
 	}
 
 	f, err := os.Open(path)
@@ -162,7 +178,6 @@ func calculateFileHash(path string) (fileHashAndState, error) {
 		return result, err
 	}
 	defer f.Close()
-
 	// at this point we know for sure the file exists and we can read its content even if that content is empty
 	result.exists = true
 
@@ -188,4 +203,21 @@ func calculateHash(content io.Reader) (string, bool, error) {
 		return "", true, nil
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), false, nil
+}
+
+func isFile(path string) (bool, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// this is fatal
+	if stat.IsDir() {
+		return false, fmt.Errorf("%s is a directory", path)
+	}
+
+	return true, nil
 }

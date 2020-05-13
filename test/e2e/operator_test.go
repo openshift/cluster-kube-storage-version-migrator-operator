@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +20,7 @@ func TestOperatorNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = kubeClient.CoreV1().Namespaces().Get(operator.OperatorNamespace, metav1.GetOptions{})
+	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), operator.OperatorNamespace, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestOperandNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = kubeClient.CoreV1().Namespaces().Get(operator.TargetNamespace, metav1.GetOptions{})
+	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), operator.TargetNamespace, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
