@@ -24,5 +24,3 @@ replace (
 	k8s.io/client-go => k8s.io/client-go v0.18.2
 	k8s.io/component-base => k8s.io/component-base v0.18.2
 )
-
-replace github.com/openshift/build-machinery-go => github.com/marun/build-machinery-go v0.0.0-20200424210328-043c94998366
