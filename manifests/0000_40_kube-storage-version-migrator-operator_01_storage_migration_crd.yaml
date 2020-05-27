@@ -12,6 +12,7 @@ spec:
     plural: storageversionmigrations
     singular: storageversionmigration
   scope: Cluster
+  preserveUnknownFields: false
   subresources:
     status: {}
   version: v1alpha1
