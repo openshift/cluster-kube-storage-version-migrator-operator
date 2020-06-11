@@ -12,6 +12,7 @@ spec:
     plural: storagestates
     singular: storagestate
   scope: Cluster
+  preserveUnknownFields: false
   subresources:
     status: {}
   version: v1alpha1
@@ -35,7 +36,6 @@ spec:
           submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
-          description: The name must be "<.spec.resource.resouce>.<.spec.resource.group>".
           type: object
         spec:
           description: Specification of the storage state.
