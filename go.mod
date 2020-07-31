@@ -19,6 +19,7 @@ require (
 )
 
 replace (
+	golang.org/x/text => golang.org/x/text v0.3.3
 	k8s.io/api => k8s.io/api v0.18.2
 	k8s.io/apimachinery => k8s.io/apimachinery v0.18.2
 	k8s.io/client-go => k8s.io/client-go v0.18.2
