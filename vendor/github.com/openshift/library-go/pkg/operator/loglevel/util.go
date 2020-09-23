@@ -4,7 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	"k8s.io/klog"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 )
@@ -25,6 +26,18 @@ func LogLevelToVerbosity(logLevel operatorv1.LogLevel) int {
 	}
 }
 
+var validLogLevels = sets.NewString(
+	string(operatorv1.Normal),
+	string(operatorv1.Debug),
+	string(operatorv1.Trace),
+	string(operatorv1.TraceAll),
+	"", // Tolerate empty value, it gets defaulted.
+)
+
+func ValidLogLevel(logLevel operatorv1.LogLevel) bool {
+	return validLogLevels.Has(string(logLevel))
+}
+
 // verbosityFn is exported so it can be unit tested
 var verbosityFn = klog.V
 
@@ -33,13 +46,13 @@ var verbosityFn = klog.V
 // We can use flags here as well, but this is less ugly ano more programmatically correct than flags.
 func GetLogLevel() (operatorv1.LogLevel, bool) {
 	switch {
-	case verbosityFn(8) == true:
+	case verbosityFn(8).Enabled():
 		return operatorv1.TraceAll, false
-	case verbosityFn(6) == true:
+	case verbosityFn(6).Enabled():
 		return operatorv1.Trace, false
-	case verbosityFn(4) == true:
+	case verbosityFn(4).Enabled():
 		return operatorv1.Debug, false
-	case verbosityFn(2) == true:
+	case verbosityFn(2).Enabled():
 		return operatorv1.Normal, false
 	default:
 		// this is the default log level that will be set if the operator operatorSpec does not specify one (2).
