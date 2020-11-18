@@ -4,6 +4,7 @@ metadata:
   name: storagestates.migration.k8s.io
   annotations:
     api-approved.kubernetes.io: "unapproved"
+    include.release.openshift.io/ibm-cloud-managed: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
 spec:
   group: migration.k8s.io
