@@ -4,8 +4,14 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/utils/pointer"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
+	migrationv1alpha1 "sigs.k8s.io/kube-storage-version-migrator/pkg/apis/migration/v1alpha1"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
@@ -13,8 +19,6 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/status"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
-
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
 )
 
 func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeStorageVersionMigratorSpec, originalOperatorStatus *operatorv1.KubeStorageVersionMigratorStatus, generation int64) (bool, error) {
@@ -94,7 +98,6 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 }
 
 func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operatorv1.KubeStorageVersionMigratorStatus) {
-
 	switch {
 	case deployment == nil:
 		v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
@@ -103,7 +106,7 @@ func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operat
 			Reason:  "NoDeployment",
 			Message: "deployment/migrator.openshift-kube-storage-version-migrator: could not be retrieved",
 		})
-	case deployment.Status.AvailableReplicas == 0:
+	case deployment.Status.AvailableReplicas == 0 && deployment.Spec.Replicas != nil && *deployment.Spec.Replicas > 0:
 		v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
 			Type:    operatorv1.OperatorStatusTypeAvailable,
 			Status:  operatorv1.ConditionFalse,
@@ -184,6 +187,27 @@ func (c *TargetController) manageKubeStorageVersionMigratorDeployment(spec *oper
 	}
 	if templateSpec.Containers, err = c.resolveImageReferences(templateSpec.Containers); err != nil {
 		return nil, false, err
+	}
+
+	// scale depending on CRs
+	migrations, err := c.migrationLister.List(labels.Everything())
+	if err != nil {
+		return nil, false, err
+	}
+	foundActive := false
+migrationLoop:
+	for _, m := range migrations {
+		for _, c := range m.Status.Conditions {
+			if (c.Type == migrationv1alpha1.MigrationSucceeded || c.Type == migrationv1alpha1.MigrationFailed) && c.Status == corev1.ConditionTrue {
+				continue
+			}
+
+			foundActive = true
+			break migrationLoop
+		}
+	}
+	if !foundActive {
+		deployment.Spec.Replicas = pointer.Int32Ptr(0)
 	}
 
 	// set annotations to force diff on pull spec changes

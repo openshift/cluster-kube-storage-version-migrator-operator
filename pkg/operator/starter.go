@@ -22,6 +22,8 @@ import (
 	"github.com/openshift/library-go/pkg/operator/status"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/targetcontroller"
+	migrationv1alpha1client "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset"
+	"sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer"
 )
 
 const (
@@ -46,6 +48,11 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
+	migrationClient, err := migrationv1alpha1client.NewForConfig(cc.KubeConfig)
+	if err != nil {
+		return err
+	}
+
 	genericOperatorConfigClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(
 		cc.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
 	if err != nil {
@@ -66,12 +73,16 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	kubeInformersForTargetNamespace := informers.NewSharedInformerFactoryWithOptions(kubeClient, 10*time.Minute,
 		informers.WithNamespace(TargetNamespace),
 	)
+
+	migrationInformer := informer.NewSharedInformerFactory(migrationClient, 10*time.Minute)
+
 	targetController := targetcontroller.NewTargetController(
 		kubeClient,
 		genericOperatorConfigClient,
 		operatorConfigClient.KubeStorageVersionMigrators(),
 		kubeInformersForTargetNamespace.Core().V1().Secrets(),
 		kubeInformersForTargetNamespace.Apps().V1().Deployments(),
+		migrationInformer.Migration().V1alpha1().StorageVersionMigrations(),
 		os.Getenv("IMAGE"),
 		os.Getenv("OPERATOR_IMAGE"),
 		cc.EventRecorder,

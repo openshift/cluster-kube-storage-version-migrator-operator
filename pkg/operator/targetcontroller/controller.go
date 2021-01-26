@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	migrationv1alpha1informer "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer/migration/v1alpha1"
+	migrationv1alpha1lister "sigs.k8s.io/kube-storage-version-migrator/pkg/clients/lister/migration/v1alpha1"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -36,6 +39,7 @@ type TargetController struct {
 	operatorConfigClient        operatorv1client.KubeStorageVersionMigratorInterface
 	imagePullSpec               string
 	operatorImagePullSpec       string
+	migrationLister             migrationv1alpha1lister.StorageVersionMigrationLister
 
 	eventRecorder   events.Recorder
 	versionRecorder status.VersionGetter
@@ -49,6 +53,7 @@ func NewTargetController(kubeClient kubernetes.Interface,
 	operatorConfigClient operatorv1client.KubeStorageVersionMigratorInterface,
 	secretInformer corev1informers.SecretInformer,
 	deploymentInformer appsv1informers.DeploymentInformer,
+	migrationInformer migrationv1alpha1informer.StorageVersionMigrationInformer,
 	imagePullSpec, operatorImagePullSpec string,
 	eventRecorder events.Recorder,
 	versionRecorder status.VersionGetter) *TargetController {
@@ -56,6 +61,7 @@ func NewTargetController(kubeClient kubernetes.Interface,
 		kubeClient:                  kubeClient,
 		genericOperatorConfigClient: genericOperatorConfigClient,
 		operatorConfigClient:        operatorConfigClient,
+		migrationLister:             migrationInformer.Lister(),
 		imagePullSpec:               imagePullSpec,
 		operatorImagePullSpec:       operatorImagePullSpec,
 		eventRecorder:               eventRecorder.WithComponentSuffix("workload-controller"),
@@ -66,11 +72,13 @@ func NewTargetController(kubeClient kubernetes.Interface,
 	genericOperatorConfigClient.Informer().AddEventHandler(controller.eventHandler())
 	secretInformer.Informer().AddEventHandler(controller.eventHandler())
 	deploymentInformer.Informer().AddEventHandler(controller.eventHandler())
+	migrationInformer.Informer().AddEventHandler(controller.eventHandler())
 
 	controller.cachesToSync = append(controller.cachesToSync,
 		genericOperatorConfigClient.Informer().HasSynced,
 		deploymentInformer.Informer().HasSynced,
 		secretInformer.Informer().HasSynced,
+		migrationInformer.Informer().HasSynced,
 	)
 
 	return controller

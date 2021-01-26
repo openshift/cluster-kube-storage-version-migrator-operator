@@ -809,6 +809,16 @@ k8s.io/utils/trace
 # sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/pkg/client
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client/proto/client
+# sigs.k8s.io/kube-storage-version-migrator v0.0.3
+sigs.k8s.io/kube-storage-version-migrator/pkg/apis/migration/v1alpha1
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/scheme
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/clientset/typed/migration/v1alpha1
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer/internalinterfaces
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer/migration
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/informer/migration/v1alpha1
+sigs.k8s.io/kube-storage-version-migrator/pkg/clients/lister/migration/v1alpha1
 # sigs.k8s.io/structured-merge-diff/v4 v4.0.2
 sigs.k8s.io/structured-merge-diff/v4/fieldpath
 sigs.k8s.io/structured-merge-diff/v4/merge
