@@ -85,7 +85,7 @@ spec:
         terminationMessagePolicy: FallbackToLogsOnError
         resources:
             requests:
-              cpu: 100m
+              cpu: 10m
               memory: 200Mi
 `)
 
