@@ -87,6 +87,10 @@ spec:
             requests:
               cpu: 10m
               memory: 200Mi
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
 `)
 
 func kubeStorageVersionMigratorDeploymentYamlBytes() ([]byte, error) {
