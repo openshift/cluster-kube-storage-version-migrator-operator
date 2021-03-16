@@ -84,6 +84,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		"kube-storage-version-migrator",
 		[]configv1.ObjectReference{
 			{Group: "operator.openshift.io", Resource: "kubestorageversionmigrators", Name: "cluster"},
+			{Group: "migration.k8s.io", Resource: "storageversionmigrations"},
 			{Resource: "namespaces", Name: TargetNamespace},
 			{Resource: "namespaces", Name: OperatorNamespace},
 		},

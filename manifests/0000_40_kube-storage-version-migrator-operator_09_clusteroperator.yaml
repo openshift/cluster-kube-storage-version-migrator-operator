@@ -7,3 +7,16 @@ status:
   versions:
     - name: operator
       version: "0.0.1-snapshot"
+  relatedObjects:
+    - group: operator.openshift.io
+      name: cluster
+      resource: kubestorageversionmigrators
+    - group: migration.k8s.io
+      name: ""
+      resource: storageversionmigrations
+    - group: ""
+      name: openshift-kube-storage-version-migrator
+      resource: namespaces
+    - group: ""
+      name: openshift-kube-storage-version-migrator-operator
+      resource: namespaces
