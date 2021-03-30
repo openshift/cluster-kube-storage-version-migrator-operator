@@ -15,3 +15,6 @@
 
 # Log output from telepresence
 telepresence.log
+
+# make tools output
+/_output
