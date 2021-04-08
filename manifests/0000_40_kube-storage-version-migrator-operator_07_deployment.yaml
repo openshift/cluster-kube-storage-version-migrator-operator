@@ -17,6 +17,8 @@ spec:
   template:
     metadata:
       name: kube-storage-version-migrator-operator
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: kube-storage-version-migrator-operator
     spec:
