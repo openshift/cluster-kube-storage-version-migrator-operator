@@ -1,0 +1,76 @@
+# *** AUTOMATICALLY GENERATED FILE - DO NOT EDIT ***
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    include.release.openshift.io/ibm-cloud-managed: "true"
+  labels:
+    app: kube-storage-version-migrator-operator
+  name: kube-storage-version-migrator-operator
+  namespace: openshift-kube-storage-version-migrator-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-storage-version-migrator-operator
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: kube-storage-version-migrator-operator
+      name: kube-storage-version-migrator-operator
+    spec:
+      containers:
+      - args:
+        - --config=/var/run/configmaps/config/config.yaml
+        command:
+        - cluster-kube-storage-version-migrator-operator
+        - start
+        env:
+        - name: IMAGE
+          value: quay.io/openshift/origin-kube-storage-version-migrator:v4.4
+        - name: OPERATOR_IMAGE
+          value: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.4
+        - name: OPERATOR_IMAGE_VERSION
+          value: 0.0.1-snapshot
+        - name: OPERAND_IMAGE_VERSION
+          value: 0.0.1-snapshot
+        image: quay.io/openshift/origin-cluster-kube-storage-version-migrator-operator:v4.4
+        name: kube-storage-version-migrator-operator
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        terminationMessagePolicy: FallbackToLogsOnError
+        volumeMounts:
+        - mountPath: /var/run/configmaps/config
+          name: config
+        - mountPath: /var/run/secrets/serving-cert
+          name: serving-cert
+      priorityClassName: system-cluster-critical
+      serviceAccountName: kube-storage-version-migrator-operator
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+      - effect: NoExecute
+        key: node.kubernetes.io/unreachable
+        operator: Exists
+        tolerationSeconds: 120
+      - effect: NoExecute
+        key: node.kubernetes.io/not-ready
+        operator: Exists
+        tolerationSeconds: 120
+      volumes:
+      - name: serving-cert
+        secret:
+          optional: true
+          secretName: serving-cert
+      - configMap:
+          name: config
+        name: config
