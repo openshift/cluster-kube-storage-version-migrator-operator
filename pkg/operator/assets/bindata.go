@@ -99,6 +99,11 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 120
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
 `)
 
 func kubeStorageVersionMigratorDeploymentYamlBytes() ([]byte, error) {
