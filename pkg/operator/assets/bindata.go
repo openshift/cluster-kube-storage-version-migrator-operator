@@ -71,6 +71,8 @@ spec:
       app: migrator
   template:
     metadata:
+      annotations:
+        target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: migrator
     spec:
@@ -121,8 +123,11 @@ var _kubeStorageVersionMigratorNamespaceYaml = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
   name: openshift-kube-storage-version-migrator
+  annotations:
+    workload.openshift.io/allowed: "management"
   labels:
-    openshift.io/cluster-monitoring: "true"`)
+    openshift.io/cluster-monitoring: "true"
+`)
 
 func kubeStorageVersionMigratorNamespaceYamlBytes() ([]byte, error) {
 	return _kubeStorageVersionMigratorNamespaceYaml, nil
