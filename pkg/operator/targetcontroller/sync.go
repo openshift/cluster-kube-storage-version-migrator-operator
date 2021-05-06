@@ -11,7 +11,6 @@ import (
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
-	"github.com/openshift/library-go/pkg/operator/status"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
@@ -47,16 +46,6 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	// TODO this is changing too early and it was before too.
 	operatorStatus.ObservedGeneration = generation
 	resourcemerge.SetDeploymentGeneration(&operatorStatus.Generations, deployment)
-
-	// if we are available, we need to try to set our versions correctly.
-	if v1helpers.IsOperatorConditionTrue(operatorStatus.Conditions, operatorv1.OperatorStatusTypeAvailable) {
-		operandVersion := status.VersionForOperand(
-			OperatorNamespace,
-			deployment.Spec.Template.Spec.Containers[0].Image,
-			c.kubeClient.CoreV1(),
-			c.eventRecorder)
-		c.versionRecorder.SetVersion("kube-storage-version-migrator", operandVersion)
-	}
 
 	// patch conditions, observedGenerations and Generation in the existing operation status
 	var updateStatusFuncs []v1helpers.UpdateStatusFunc
