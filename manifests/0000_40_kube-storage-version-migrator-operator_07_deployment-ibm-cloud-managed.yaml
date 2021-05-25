@@ -48,6 +48,8 @@ spec:
           requests:
             cpu: 10m
             memory: 50Mi
+        securityContext:
+          runAsUser: 1001
         terminationMessagePolicy: FallbackToLogsOnError
         volumeMounts:
         - mountPath: /var/run/configmaps/config
