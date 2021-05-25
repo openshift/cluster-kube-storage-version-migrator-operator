@@ -38,6 +38,8 @@ spec:
           requests:
             memory: 50Mi
             cpu: 10m
+        securityContext:
+          runAsUser: 1001
         volumeMounts:
           - mountPath: /var/run/configmaps/config
             name: config

@@ -30,6 +30,8 @@ spec:
             requests:
               cpu: 10m
               memory: 200Mi
+        securityContext:
+          runAsUser: 1001
       priorityClassName: system-cluster-critical
       tolerations:
         - key: node-role.kubernetes.io/master
