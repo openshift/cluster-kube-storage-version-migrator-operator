@@ -52,7 +52,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	clusterOperator, err := configClient.ConfigV1().ClusterOperators().Get(ctx, "kube-storage-version-migrator-apiserver", metav1.GetOptions{})
+	clusterOperator, err := configClient.ConfigV1().ClusterOperators().Get(ctx, "kube-storage-version-migrator", metav1.GetOptions{})
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
