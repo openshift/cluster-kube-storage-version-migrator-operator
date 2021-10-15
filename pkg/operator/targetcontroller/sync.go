@@ -87,7 +87,7 @@ func manageOperatorStatusUpgradeable(status *operatorv1.KubeStorageVersionMigrat
 	// Create a default condition to avoid status controller from assuming 'Upgradeable=Unknown'.
 	// No known reasons to set Upgradeable=False as of this date.
 	v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
-		Type:   "DefaultUpgradable",
+		Type:   "DefaultUpgradeable",
 		Status: operatorv1.ConditionTrue,
 		Reason: "Default",
 	})
