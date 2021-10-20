@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-kube-storage-version-migrator-operator
 
-go 1.13
+go 1.16
 
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
