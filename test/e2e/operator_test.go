@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
 	library "github.com/openshift/cluster-kube-storage-version-migrator-operator/test/library"
 )
 
@@ -20,7 +20,7 @@ func TestOperatorNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), operator.OperatorNamespace, metav1.GetOptions{})
+	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), pkg.OperatorNamespace, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestOperandNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), operator.TargetNamespace, metav1.GetOptions{})
+	_, err = kubeClient.CoreV1().Namespaces().Get(context.Background(), pkg.TargetNamespace, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
