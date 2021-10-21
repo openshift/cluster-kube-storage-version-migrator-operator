@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-
 	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/resource/resourcemerge"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceread"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
 )
@@ -43,6 +42,7 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	manageOperatorStatusAvailable(deployment, operatorStatus)
 	manageOperatorStatusProgressing(deployment, errors, operatorStatus, generation)
 	manageOperatorStatusDegraded(errors, operatorStatus)
+	manageOperatorStatusUpgradeable(operatorStatus)
 
 	// TODO this is changing too early and it was before too.
 	operatorStatus.ObservedGeneration = generation
@@ -81,6 +81,16 @@ func (c *TargetController) syncKubeStorageVersionMigrator(spec *operatorv1.KubeS
 	}
 
 	return false, nil
+}
+
+func manageOperatorStatusUpgradeable(status *operatorv1.KubeStorageVersionMigratorStatus) {
+	// Create a default condition to avoid status controller from assuming 'Upgradeable=Unknown'.
+	// No known reasons to set Upgradeable=False as of this date.
+	v1helpers.SetOperatorCondition(&status.Conditions, operatorv1.OperatorCondition{
+		Type:   "DefaultUpgradeable",
+		Status: operatorv1.ConditionTrue,
+		Reason: "Default",
+	})
 }
 
 func manageOperatorStatusAvailable(deployment *appsv1.Deployment, status *operatorv1.KubeStorageVersionMigratorStatus) {
