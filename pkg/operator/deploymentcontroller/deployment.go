@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/library-go/pkg/controller/factory"
 	"github.com/openshift/library-go/pkg/operator/deploymentcontroller"
 	"github.com/openshift/library-go/pkg/operator/events"
@@ -16,7 +17,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
 )
 
 func NewMigratorDeploymentController(
@@ -27,7 +27,7 @@ func NewMigratorDeploymentController(
 ) factory.Controller {
 	return deploymentcontroller.NewDeploymentController(
 		"KubeStorageVersionMigrator",
-		assets.MustAsset("kube-storage-version-migrator/deployment.yaml"),
+		bindata.MustAsset("kube-storage-version-migrator/deployment.yaml"),
 		recorder,
 		operatorClient,
 		kubeClient,

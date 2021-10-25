@@ -9,6 +9,7 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/genericoperatorclient"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
@@ -21,7 +22,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/assets"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/deploymentcontroller"
 )
 
@@ -57,7 +57,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	staticResourceController := staticresourcecontroller.NewStaticResourceController(
 		"KubeStorageVersionMigratorStaticResources",
-		assets.Asset,
+		bindata.Asset,
 		[]string{
 			"kube-storage-version-migrator/namespace.yaml",
 			"kube-storage-version-migrator/serviceaccount.yaml",
