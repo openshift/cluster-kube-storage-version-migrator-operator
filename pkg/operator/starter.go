@@ -9,11 +9,11 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/genericoperatorclient"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/staleconditions"
 	"github.com/openshift/library-go/pkg/operator/staticresourcecontroller"
 	"github.com/openshift/library-go/pkg/operator/status"
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
@@ -21,8 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/deploymentcontroller"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/staticconditionscontroller"
 )
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
@@ -92,6 +94,17 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		cc.EventRecorder,
 	)
 
+	staticConditionsController := staticconditionscontroller.NewStaticConditionsController(
+		operatorClient, cc.EventRecorder,
+		operatorv1.OperatorCondition{Type: "Default" + operatorv1.OperatorStatusTypeUpgradeable, Status: operatorv1.ConditionTrue, Reason: "Default"},
+	)
+
+	staleConditionsController := staleconditions.NewRemoveStaleConditionsController(
+		[]string{"Available", "Progressing", "TargetDegraded", "DefaultUpgradable"},
+		operatorClient,
+		cc.EventRecorder,
+	)
+
 	loggingController := loglevel.NewClusterOperatorLoggingController(operatorClient, cc.EventRecorder)
 
 	configInformers.Start(ctx.Done())
@@ -101,6 +114,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	go statusController.Run(ctx, 1)
 	go staticResourceController.Run(ctx, 1)
 	go migratorDeploymentController.Run(ctx, 1)
+	go staticConditionsController.Run(ctx, 1)
+	go staleConditionsController.Run(ctx, 1)
 	go loggingController.Run(ctx, 1)
 
 	<-ctx.Done()
