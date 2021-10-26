@@ -2,9 +2,12 @@ reviewers:
   - deads2k
   - sttts
   - sanchezl
+  - p0lyn0mial
+  - tkashem
 approvers:
-  - smarterclayton
   - deads2k
   - sttts
   - mfojtik
+  - p0lyn0mial
+  - tkashem
 component: kube-storage-version-migrator
