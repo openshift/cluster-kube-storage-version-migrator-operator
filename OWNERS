@@ -10,4 +10,5 @@ approvers:
   - mfojtik
   - p0lyn0mial
   - tkashem
+  - sanchezl
 component: kube-storage-version-migrator
