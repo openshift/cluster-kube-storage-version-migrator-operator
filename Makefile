@@ -3,15 +3,11 @@ GO_REQUIRED_MIN_VERSION = 1.14
 # Include the library makefiles
 include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
 	golang.mk \
-	targets/openshift/bindata.mk \
 	targets/openshift/images.mk \
 	targets/openshift/deps.mk \
 	targets/openshift/operator/telepresence.mk \
 	targets/openshift/operator/profile-manifests.mk \
 )
-
-# generate bindata targets
-$(call add-bindata,assets,./bindata/...,bindata,assets,pkg/operator/assets/bindata.go)
 
 # generate image targets
 IMAGE_REGISTRY :=registry.svc.ci.openshift.org
