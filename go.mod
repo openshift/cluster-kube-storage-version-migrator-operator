@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/go-bindata/go-bindata v3.1.2+incompatible
+	github.com/google/go-cmp v0.5.2
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/openshift/api v0.0.0-20210726144523-6fcabc0010ca
 	github.com/openshift/build-machinery-go v0.0.0-20210806203541-4ea9b6da3a37
@@ -16,7 +17,6 @@ require (
 	k8s.io/apimachinery v0.21.1
 	k8s.io/client-go v0.21.1
 	k8s.io/component-base v0.21.1
-	k8s.io/klog/v2 v2.8.0
 	sigs.k8s.io/kube-storage-version-migrator v0.0.5-0.20210421184352-acdee30ced21
 )
 
