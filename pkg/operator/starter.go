@@ -3,30 +3,28 @@ package operator
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
-
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 
 	configv1 "github.com/openshift/api/config/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
-	operatorv1client "github.com/openshift/client-go/operator/clientset/versioned/typed/operator/v1"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/genericoperatorclient"
 	"github.com/openshift/library-go/pkg/operator/loglevel"
+	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
+	"github.com/openshift/library-go/pkg/operator/staleconditions"
+	"github.com/openshift/library-go/pkg/operator/staticresourcecontroller"
 	"github.com/openshift/library-go/pkg/operator/status"
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 
-	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/targetcontroller"
-)
-
-const (
-	OperatorNamespace = "openshift-kube-storage-version-migrator-operator"
-	TargetNamespace   = "openshift-kube-storage-version-migrator"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/deploymentcontroller"
+	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/staticconditionscontroller"
 )
 
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
@@ -41,13 +39,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	operatorConfigClient, err := operatorv1client.NewForConfig(cc.KubeConfig)
-	if err != nil {
-		return err
-	}
-
-	genericOperatorConfigClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(
-		cc.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
+	operatorClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(cc.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
 	if err != nil {
 		return err
 	}
@@ -63,19 +55,26 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	}
 	versionRecorder.SetVersion("operator", status.VersionForOperatorFromEnv())
 
-	kubeInformersForTargetNamespace := informers.NewSharedInformerFactoryWithOptions(kubeClient, 10*time.Minute,
-		informers.WithNamespace(TargetNamespace),
-	)
-	targetController := targetcontroller.NewTargetController(
-		kubeClient,
-		genericOperatorConfigClient,
-		operatorConfigClient.KubeStorageVersionMigrators(),
-		kubeInformersForTargetNamespace.Core().V1().Secrets(),
-		kubeInformersForTargetNamespace.Apps().V1().Deployments(),
-		os.Getenv("IMAGE"),
-		os.Getenv("OPERATOR_IMAGE"),
+	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient, pkg.TargetNamespace)
+
+	staticResourceController := staticresourcecontroller.NewStaticResourceController(
+		"KubeStorageVersionMigratorStaticResources",
+		bindata.Asset,
+		[]string{
+			"kube-storage-version-migrator/namespace.yaml",
+			"kube-storage-version-migrator/serviceaccount.yaml",
+			"kube-storage-version-migrator/roles.yaml",
+		},
+		(&resourceapply.ClientHolder{}).WithKubernetes(kubeClient),
+		operatorClient,
 		cc.EventRecorder,
-		versionRecorder,
+	)
+
+	migratorDeploymentController := deploymentcontroller.NewMigratorDeploymentController(
+		kubeClient,
+		operatorClient,
+		kubeInformersForNamespaces,
+		cc.EventRecorder,
 	)
 
 	configInformers := configinformers.NewSharedInformerFactory(configClient, 10*time.Minute)
@@ -85,24 +84,38 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		[]configv1.ObjectReference{
 			{Group: "operator.openshift.io", Resource: "kubestorageversionmigrators", Name: "cluster"},
 			{Group: "migration.k8s.io", Resource: "storageversionmigrations"},
-			{Resource: "namespaces", Name: TargetNamespace},
-			{Resource: "namespaces", Name: OperatorNamespace},
+			{Resource: "namespaces", Name: pkg.TargetNamespace},
+			{Resource: "namespaces", Name: pkg.OperatorNamespace},
 		},
 		configClient.ConfigV1(),
 		configInformers.Config().V1().ClusterOperators(),
-		genericOperatorConfigClient,
+		operatorClient,
 		versionRecorder,
 		cc.EventRecorder,
 	)
 
-	loggingController := loglevel.NewClusterOperatorLoggingController(genericOperatorConfigClient, cc.EventRecorder)
+	staticConditionsController := staticconditionscontroller.NewStaticConditionsController(
+		operatorClient, cc.EventRecorder,
+		operatorv1.OperatorCondition{Type: "Default" + operatorv1.OperatorStatusTypeUpgradeable, Status: operatorv1.ConditionTrue, Reason: "Default"},
+	)
+
+	staleConditionsController := staleconditions.NewRemoveStaleConditionsController(
+		[]string{"Available", "Progressing", "TargetDegraded", "DefaultUpgradable"},
+		operatorClient,
+		cc.EventRecorder,
+	)
+
+	loggingController := loglevel.NewClusterOperatorLoggingController(operatorClient, cc.EventRecorder)
 
 	configInformers.Start(ctx.Done())
 	dynamicInformers.Start(ctx.Done())
-	kubeInformersForTargetNamespace.Start(ctx.Done())
+	kubeInformersForNamespaces.Start(ctx.Done())
 
 	go statusController.Run(ctx, 1)
-	go targetController.Run(1, ctx.Done())
+	go staticResourceController.Run(ctx, 1)
+	go migratorDeploymentController.Run(ctx, 1)
+	go staticConditionsController.Run(ctx, 1)
+	go staleConditionsController.Run(ctx, 1)
 	go loggingController.Run(ctx, 1)
 
 	<-ctx.Done()
