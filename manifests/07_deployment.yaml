@@ -39,6 +39,10 @@ spec:
             memory: 50Mi
             cpu: 10m
         securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
           runAsUser: 1001
         volumeMounts:
           - mountPath: /var/run/configmaps/config
@@ -65,6 +69,10 @@ spec:
       nodeSelector:
         node-role.kubernetes.io/master: ""
       priorityClassName: "system-cluster-critical"
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       tolerations:
       - key: "node-role.kubernetes.io/master"
         operator: "Exists"
