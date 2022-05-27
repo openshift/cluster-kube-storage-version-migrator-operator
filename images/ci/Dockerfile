@@ -4,7 +4,7 @@ COPY . .
 ENV GO_PACKAGE github.com/openshift/cluster-kube-storage-version-migrator-operator
 RUN make build --warn-undefined-variables
 
-FROM registry.ci.openshift.org/ocp/4.9:base
+FROM registry.ci.openshift.org/ocp/4.10:base
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-storage-version-migrator-operator/cluster-kube-storage-version-migrator-operator /usr/bin/
 COPY manifests /manifests
 COPY vendor/github.com/openshift/api/operator/v1/*_kube-storage-version-migrator-operator_*.yaml* /manifests
