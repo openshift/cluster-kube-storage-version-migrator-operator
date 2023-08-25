@@ -53,3 +53,5 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 120
+      nodeSelector:
+        node-role.kubernetes.io/master: ""
