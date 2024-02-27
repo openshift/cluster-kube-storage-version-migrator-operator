@@ -19,6 +19,7 @@ spec:
   template:
     metadata:
       annotations:
+        openshift.io/required-scc: nonroot-v2
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         app: kube-storage-version-migrator-operator
