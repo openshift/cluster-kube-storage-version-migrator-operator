@@ -14,6 +14,7 @@ spec:
     metadata:
       annotations:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        openshift.io/required-scc: nonroot-v2
       labels:
         app: migrator
     spec:
