@@ -3,7 +3,6 @@ package controllercmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -14,12 +13,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/logs"
+
 	"k8s.io/klog/v2"
 
 	operatorv1alpha1 "github.com/openshift/api/operator/v1alpha1"
@@ -64,8 +66,12 @@ type ControllerCommandConfig struct {
 	// between tries of actions.
 	RetryPeriod metav1.Duration
 
+	// TopologyDetector is used to plug in topology detection.
+	TopologyDetector TopologyDetector
+
 	ComponentOwnerReference *corev1.ObjectReference
 	healthChecks            []healthz.HealthChecker
+	eventRecorderOptions    record.CorrelatorOptions
 }
 
 // NewControllerConfig returns a new ControllerCommandConfig which can be used to wire up all the boiler plate of a controller
@@ -80,6 +86,7 @@ func NewControllerCommandConfig(componentName string, version version.Info, star
 
 		DisableServing:        false,
 		DisableLeaderElection: false,
+		eventRecorderOptions:  events.RecommendedClusterSingletonCorrelatorOptions(),
 	}
 }
 
@@ -91,6 +98,16 @@ func (c *ControllerCommandConfig) WithComponentOwnerReference(reference *corev1.
 
 func (c *ControllerCommandConfig) WithHealthChecks(healthChecks ...healthz.HealthChecker) *ControllerCommandConfig {
 	c.healthChecks = append(c.healthChecks, healthChecks...)
+	return c
+}
+
+func (c *ControllerCommandConfig) WithTopologyDetector(topologyDetector TopologyDetector) *ControllerCommandConfig {
+	c.TopologyDetector = topologyDetector
+	return c
+}
+
+func (c *ControllerCommandConfig) WithEventRecorderOptions(eventRecorderOptions record.CorrelatorOptions) *ControllerCommandConfig {
+	c.eventRecorderOptions = eventRecorderOptions
 	return c
 }
 
@@ -142,7 +159,7 @@ func (c *ControllerCommandConfig) NewCommandWithContext(ctx context.Context) *co
 				}
 				files := map[string][]byte{}
 				for _, fn := range c.basicFlags.TerminateOnFiles {
-					fileBytes, err := ioutil.ReadFile(fn)
+					fileBytes, err := os.ReadFile(fn)
 					if err != nil {
 						klog.Warningf("Unable to read initial content of %q: %v", fn, err)
 						continue // intentionally ignore errors
@@ -240,7 +257,7 @@ func (c *ControllerCommandConfig) AddDefaultRotationToConfig(config *operatorv1a
 			startingFileContent[filepath.Join(certDir, "tls.crt")] = []byte{}
 			startingFileContent[filepath.Join(certDir, "tls.key")] = []byte{}
 
-			temporaryCertDir, err := ioutil.TempDir("", "serving-cert-")
+			temporaryCertDir, err := os.MkdirTemp("", "serving-cert-")
 			if err != nil {
 				return nil, nil, err
 			}
@@ -260,7 +277,7 @@ func (c *ControllerCommandConfig) AddDefaultRotationToConfig(config *operatorv1a
 			config.ServingInfo.CertFile = filepath.Join(temporaryCertDir, "tls.crt")
 			config.ServingInfo.KeyFile = filepath.Join(temporaryCertDir, "tls.key")
 			// nothing can trust this, so we don't really care about hostnames
-			servingCert, err := ca.MakeServerCert(sets.NewString("localhost"), 30)
+			servingCert, err := ca.MakeServerCert(sets.New("localhost"), 30)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -311,7 +328,7 @@ func (c *ControllerCommandConfig) StartController(ctx context.Context) error {
 		WithLeaderElection(config.LeaderElection, c.basicFlags.Namespace, c.componentName+"-lock").
 		WithVersion(c.version).
 		WithHealthChecks(c.healthChecks...).
-		WithEventRecorderOptions(events.RecommendedClusterSingletonCorrelatorOptions()).
+		WithEventRecorderOptions(c.eventRecorderOptions).
 		WithRestartOnChange(exitOnChangeReactorCh, startingFileContent, observedFiles...).
 		WithComponentOwnerReference(c.ComponentOwnerReference)
 
@@ -320,6 +337,10 @@ func (c *ControllerCommandConfig) StartController(ctx context.Context) error {
 		if c.EnableHTTP2 {
 			builder = builder.WithHTTP2()
 		}
+	}
+
+	if c.TopologyDetector != nil {
+		builder = builder.WithTopologyDetector(c.TopologyDetector)
 	}
 
 	return builder.Run(controllerCtx, unstructuredConfig)
