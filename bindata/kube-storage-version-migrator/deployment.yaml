@@ -6,17 +6,17 @@ metadata:
   labels:
     app: migrator
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
-      app: migrator
+      app: kube-storage-version-migration-migrator
   template:
     metadata:
       annotations:
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
         openshift.io/required-scc: nonroot-v2
       labels:
-        app: migrator
+        app: kube-storage-version-migration-migrator
     spec:
       securityContext:
         runAsNonRoot: true
@@ -54,3 +54,10 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 120
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: kube-storage-version-migration-migrator
+              topologyKey: kubernetes.io/hostname
