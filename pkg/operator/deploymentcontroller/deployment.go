@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
@@ -49,18 +50,11 @@ func replaceAll(old, new string) deploymentcontroller.ManifestHookFunc {
 }
 
 func setOperandLogLevel(spec *operatorv1.OperatorSpec, deployment *appsv1.Deployment) error {
-	var i int
-	var ok bool
-	var c corev1.Container
-	for i, c = range deployment.Spec.Template.Spec.Containers {
-		ok = c.Name == "migrator"
-		if ok {
-			break
-		}
-	}
-	if !ok {
+	i := slices.IndexFunc(deployment.Spec.Template.Spec.Containers, func(c corev1.Container) bool { return c.Name == "migrator" })
+	if i < 0 {
 		return fmt.Errorf("deployment does not contain a container named migrator")
 	}
+
 	v := 2
 	switch spec.LogLevel {
 	case operatorv1.TraceAll:
@@ -73,21 +67,22 @@ func setOperandLogLevel(spec *operatorv1.OperatorSpec, deployment *appsv1.Deploy
 	logLevelArg := fmt.Sprintf("--v=%d", v)
 
 	container := &deployment.Spec.Template.Spec.Containers[i]
-	command := container.Command[:0]
-	var logLevelSet bool
-	for _, arg := range container.Command {
-		if strings.HasPrefix(arg, "--v=") {
-			// replace existing log level arg
-			command = append(command, logLevelArg)
-			logLevelSet = true
-			continue
-		}
-		command = append(command, arg)
+
+	// if existing --v found in command, replace there
+	i = slices.IndexFunc(container.Command, func(s string) bool { return strings.HasPrefix(s, "--v=") })
+	if i != -1 {
+		container.Command[i] = logLevelArg
+		return nil
 	}
-	if !logLevelSet {
-		// append new log level arg
-		command = append(command, logLevelArg)
-		container.Command = command
+
+	// if existing --v found in args, replace there
+	i = slices.IndexFunc(container.Args, func(s string) bool { return strings.HasPrefix(s, "--v=") })
+	if i != -1 {
+		container.Args[i] = logLevelArg
+		return nil
 	}
+
+	// --v not found, append to args
+	container.Args = append(container.Args, logLevelArg)
 	return nil
 }
