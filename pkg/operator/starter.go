@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	configv1 "github.com/openshift/api/config/v1"
@@ -18,8 +19,11 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 
+	applyoperatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/operator/deploymentcontroller"
@@ -38,7 +42,14 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		return err
 	}
 
-	operatorClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(cc.KubeConfig, operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"))
+	operatorClient, dynamicInformers, err := genericoperatorclient.NewClusterScopedOperatorClient(
+		cc.Clock,
+		cc.KubeConfig,
+		operatorv1.GroupVersion.WithResource("kubestorageversionmigrators"),
+		operatorv1.GroupVersion.WithKind("KubeStorageVersionMigrator"),
+		extractOperatorSpec,
+		extractOperatorStatus,
+	)
 	if err != nil {
 		return err
 	}
@@ -99,6 +110,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	)
 
 	staleConditionsController := staleconditions.NewRemoveStaleConditionsController(
+		"kube-storage-version-migrator",
 		[]string{"Available", "Progressing", "TargetDegraded", "DefaultUpgradable"},
 		operatorClient,
 		cc.EventRecorder,
@@ -119,4 +131,35 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	<-ctx.Done()
 	return nil
+}
+
+func extractOperatorSpec(obj *unstructured.Unstructured, fieldManager string) (*applyoperatorv1.OperatorSpecApplyConfiguration, error) {
+	castObj := &operatorv1.KubeStorageVersionMigrator{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
+		return nil, fmt.Errorf("unable to convert to KubeStorageVersionMigrator: %w", err)
+	}
+	ret, err := applyoperatorv1.ExtractKubeStorageVersionMigrator(castObj, fieldManager)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract fields for %q: %w", fieldManager, err)
+	}
+	if ret.Spec == nil {
+		return nil, nil
+	}
+	return &ret.Spec.OperatorSpecApplyConfiguration, nil
+}
+
+func extractOperatorStatus(obj *unstructured.Unstructured, fieldManager string) (*applyoperatorv1.OperatorStatusApplyConfiguration, error) {
+	castObj := &operatorv1.KubeStorageVersionMigrator{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, castObj); err != nil {
+		return nil, fmt.Errorf("unable to convert to KubeStorageVersionMigrator: %w", err)
+	}
+	ret, err := applyoperatorv1.ExtractKubeStorageVersionMigratorStatus(castObj, fieldManager)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract fields for %q: %w", fieldManager, err)
+	}
+
+	if ret.Status == nil {
+		return nil, nil
+	}
+	return &ret.Status.OperatorStatusApplyConfiguration, nil
 }
