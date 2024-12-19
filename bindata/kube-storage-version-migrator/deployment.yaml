@@ -26,8 +26,12 @@ spec:
       containers:
       - name: migrator
         image: ${IMAGE}
-        command:
-          - migrator
+        command: [ "/bin/bash", "-c"]
+        args:
+          - |-
+            trap 'echo "Termination signal received, but ignored. Continuing..."; sleep infinity' TERM
+            migrator "$@" & wait $!
+          - bash
           - '--alsologtostderr'
           - '--v=2'
         terminationMessagePolicy: FallbackToLogsOnError
@@ -40,7 +44,25 @@ spec:
           capabilities:
             drop:
             - ALL
-          runAsUser: 1001          
+          runAsUser: 1001
+      - name: graceful-termination
+        image: ${IMAGE}
+        command: [ "/bin/bash", "-c" ]
+        args:
+          - |-
+            trap 'echo "Gracefully sleeping for 25s to let another pod start..."; sleep 25; exit' EXIT
+            while true; do echo "Waiting for termination..."; sleep 3600 & wait $!; done
+        terminationMessagePolicy: FallbackToLogsOnError
+        resources:
+          requests:
+            cpu: 1m
+            memory: 1Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsUser: 1001
       priorityClassName: system-cluster-critical
       tolerations:
         - key: node-role.kubernetes.io/master
@@ -54,3 +76,4 @@ spec:
           operator: Exists
           effect: NoExecute
           tolerationSeconds: 120
+      terminationGracePeriodSeconds: 30
