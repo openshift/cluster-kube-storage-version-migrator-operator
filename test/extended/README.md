@@ -14,8 +14,6 @@ They use the framework: https://github.com/openshift-eng/openshift-tests-extensi
 | `./cluster-kube-storage-version-migrator-operator-tests-ext run-suite <suite-name>` | Runs a test suite. e.g., `openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel` |
 | `./cluster-kube-storage-version-migrator-operator-tests-ext run-test <test-name>` | Runs one specific test. |
 
-## How to Run the Tests Locally
-
 The tests can be run locally using the `cluster-kube-storage-version-migrator-operator-tests-ext` binary against an OpenShift cluster.
 Use the environment variable `KUBECONFIG` to point to your cluster configuration file such as:
 
@@ -53,7 +51,7 @@ export KUBECONFIG=~/.kube/cluster-bot.kubeconfig
 To generate JUnit XML reports for CI integration:
 
 ```shell
-./cluster-kube-storage-version-migrator-operator-tests-ext run-suite openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel --junit-dir=test-output
+./cluster-kube-storage-version-migrator-operator-tests-ext run-suite openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel --junit-path $(ARTIFACT_DIR)/junit_$(shell date +%Y%m%d-%H%M%S).xml
 ```
 
 This generates both OTE framework and Ginkgo JUnit XML reports that can be integrated into CI systems.
@@ -79,10 +77,9 @@ The CI configuration runs the OTE binary and generates JUnit reports for test re
     echo "Build binary cluster-kube-storage-version-migrator-operator-tests-ext"
     make tests-ext-build
     echo "Running ./cluster-kube-storage-version-migrator-operator-tests-ext with sanity test"
-    mkdir -p ${ARTIFACT_DIR}
-    ./cluster-kube-storage-version-migrator-operator-tests-ext run-test \
-      --junit-dir=${ARTIFACT_DIR} \
-      -n "[Jira:storage-version-migrator][sig-api-machinery] sanity test should always pass [Suite:openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel]"
+    ./cluster-kube-storage-version-migrator-operator-tests-ext run-suite \
+      "openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel" \
+      --junit-path ${ARTIFACT_DIR}/junit_report.xml
   from: src
 ```
 
