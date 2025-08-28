@@ -1,0 +1,12 @@
+{
+  "component": "cluster-kube-storage-version-migrator-operator",
+  "generated": "2025-08-25T12:00:00Z",
+  "removedTests": [],
+  "tests": [
+    {
+      "name": "[Jira:storage-version-migrator][sig-api-machinery] sanity test should always pass [Suite:openshift/cluster-kube-storage-version-migrator-operator/conformance/parallel]",
+      "originalName": "",
+      "source": "openshift:payload:cluster-kube-storage-version-migrator-operator"
+    }
+  ]
+}

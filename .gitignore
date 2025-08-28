@@ -18,3 +18,12 @@ telepresence.log
 
 # make tools output
 /_output
+cluster-kube-storage-version-migrator-operator-tests-ext
+
+# Test output files
+junit.xml
+report.json
+test-results/
+
+# OpenShift Tests Extension metadata
+.openshift-tests-extension/openshift_payload_*.json
