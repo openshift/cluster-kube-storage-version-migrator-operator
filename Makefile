@@ -37,7 +37,7 @@ export TP_CMD_PATH ?=./cmd/cluster-kube-storage-version-migrator-operator
 
 # Build the openshift-tests-extension binary
 tests-ext-build:
-	GOOS=$(if $(GOOS),$(GOOS),$(shell go env GOOS)) GOARCH=$(if $(GOARCH),$(GOARCH),$(shell go env GOARCH)) GO_COMPLIANCE_POLICY=exempt_all CGO_ENABLED=0 \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) GO_COMPLIANCE_POLICY=exempt_all CGO_ENABLED=0 \
 	go build -o cluster-kube-storage-version-migrator-operator-tests-ext \
 	-ldflags "-X 'main.CommitFromGit=$(shell git rev-parse --short HEAD)' \
 	-X 'main.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' \
