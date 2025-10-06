@@ -1,4 +1,4 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.20 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.21 AS builder
 WORKDIR /go/src/github.com/openshift/cluster-kube-storage-version-migrator-operator
 COPY . .
 ENV GO_PACKAGE github.com/openshift/cluster-kube-storage-version-migrator-operator
@@ -6,7 +6,7 @@ RUN make build --warn-undefined-variables
 RUN make tests-ext-build --warn-undefined-variables \
     && gzip cluster-kube-storage-version-migrator-operator-tests-ext
 
-FROM registry.ci.openshift.org/ocp/4.20:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.21:base-rhel9
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-storage-version-migrator-operator/cluster-kube-storage-version-migrator-operator /usr/bin/
 COPY --from=builder /go/src/github.com/openshift/cluster-kube-storage-version-migrator-operator/cluster-kube-storage-version-migrator-operator-tests-ext.gz /usr/bin/
 COPY manifests /manifests
