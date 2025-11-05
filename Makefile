@@ -34,18 +34,3 @@ verify: verify-vendor-manifests
 # See vendor/github.com/openshift/build-machinery-go/scripts/run-telepresence.sh for usage and configuration details
 export TP_DEPLOYMENT_YAML ?=./manifests/07_deployment.yaml
 export TP_CMD_PATH ?=./cmd/cluster-kube-storage-version-migrator-operator
-
-# Build the openshift-tests-extension binary
-tests-ext-build:
-	GOOS=$(GOOS) GOARCH=$(GOARCH) GO_COMPLIANCE_POLICY=exempt_all CGO_ENABLED=0 \
-	go build -o cluster-kube-storage-version-migrator-operator-tests-ext \
-	-ldflags "-X 'main.CommitFromGit=$(shell git rev-parse --short HEAD)' \
-	-X 'main.BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)' \
-	-X 'main.GitTreeState=$(shell if git diff-index --quiet HEAD --; then echo clean; else echo dirty; fi)'" \
-	./cmd/cluster-kube-storage-version-migrator-operator-tests-ext
-.PHONY: tests-ext-build
-
-# Update test metadata
-tests-ext-update:
-	./cluster-kube-storage-version-migrator-operator-tests-ext update
-.PHONY: tests-ext-update
