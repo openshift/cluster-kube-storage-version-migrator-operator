@@ -7,7 +7,6 @@ metadata:
     app: migrator
 spec:
   replicas: 1
-  minReadySeconds: 30
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -39,7 +38,17 @@ spec:
             migrator "$@" & wait $!
           - bash
           - '--alsologtostderr'
+          - '--leader-election'
           - '--v=2'
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         terminationMessagePolicy: FallbackToLogsOnError
         resources:
             requests:
@@ -83,3 +92,13 @@ spec:
           effect: NoExecute
           tolerationSeconds: 120
       terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - migrator
