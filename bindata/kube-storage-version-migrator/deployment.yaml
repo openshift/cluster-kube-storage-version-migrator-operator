@@ -31,12 +31,9 @@ spec:
       containers:
       - name: migrator
         image: ${IMAGE}
-        command: [ "/bin/bash", "-c"]
+        command:
+          - migrator
         args:
-          - |-
-            trap 'echo "Termination signal received, but ignored. Continuing..."; sleep infinity' TERM
-            migrator "$@" & wait $!
-          - bash
           - '--alsologtostderr'
           - '--leader-election'
           - '--v=2'
