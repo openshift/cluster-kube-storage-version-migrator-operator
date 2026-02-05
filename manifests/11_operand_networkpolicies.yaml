@@ -1,0 +1,84 @@
+# NetworkPolicy for storage-version-migrator operand pods in the
+# openshift-kube-storage-version-migrator namespace.
+#
+# The migrator deployment runs on the pod network (does NOT use hostNetwork),
+# so NetworkPolicy applies to it.
+---
+# Default-deny policy for the openshift-kube-storage-version-migrator namespace.
+# This policy selects all pods in the namespace and enables default-deny for both
+# ingress and egress by specifying policyTypes without any allow rules.
+#
+# NetworkPolicies are additive (use OR logic):
+# - This policy enables default-deny for all pods
+# - Subsequent policies add specific allow rules
+# - If any policy allows traffic, that traffic is permitted
+# - Policies cannot override or block traffic allowed by other policies
+#
+# Without this policy, all pods would have unrestricted network access (allow-all).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: openshift-kube-storage-version-migrator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# Allow egress to DNS for the storage-version-migrator pods.
+# The migrator needs DNS resolution to resolve service names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-dns
+  namespace: openshift-kube-storage-version-migrator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  podSelector: {}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: openshift-dns
+      podSelector:
+        matchLabels:
+          dns.operator.openshift.io/daemonset-dns: default
+    ports:
+    - protocol: TCP
+      port: 5353
+    - protocol: UDP
+      port: 5353
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  policyTypes:
+  - Egress
+---
+# Allow egress to the Kubernetes API server.
+# The storage-version-migrator needs to communicate with the API server to:
+# - List and watch StorageVersionMigration resources
+# - Read resource definitions and storage versions
+# - Migrate stored resources to the current storage version
+# - Update migration status
+#
+# Note: We allow all egress because the API server IP address and port can vary.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-apiserver
+  namespace: openshift-kube-storage-version-migrator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app: migrator
+  egress:
+  - {}
+  policyTypes:
+  - Egress
