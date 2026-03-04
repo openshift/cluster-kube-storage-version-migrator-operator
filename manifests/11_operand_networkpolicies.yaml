@@ -4,30 +4,6 @@
 # The migrator deployment runs on the pod network (does NOT use hostNetwork),
 # so NetworkPolicy applies to it.
 ---
-# Default-deny policy for the openshift-kube-storage-version-migrator namespace.
-# This policy selects all pods in the namespace and enables default-deny for both
-# ingress and egress by specifying policyTypes without any allow rules.
-#
-# NetworkPolicies are additive (use OR logic):
-# - This policy enables default-deny for all pods
-# - Subsequent policies add specific allow rules
-# - If any policy allows traffic, that traffic is permitted
-# - Policies cannot override or block traffic allowed by other policies
-#
-# Without this policy, all pods would have unrestricted network access (allow-all).
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny
-  namespace: openshift-kube-storage-version-migrator
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
-spec:
-  podSelector: {}
-  policyTypes:
-  - Ingress
-  - Egress
----
 # Allow egress to DNS for the storage-version-migrator pods.
 # The migrator needs DNS resolution to resolve service names.
 apiVersion: networking.k8s.io/v1
@@ -81,4 +57,28 @@ spec:
   egress:
   - {}
   policyTypes:
+  - Egress
+---
+# Default-deny policy for the openshift-kube-storage-version-migrator namespace.
+# This policy selects all pods in the namespace and enables default-deny for both
+# ingress and egress by specifying policyTypes without any allow rules.
+#
+# NetworkPolicies are additive (use OR logic):
+# - This policy enables default-deny for all pods
+# - Subsequent policies add specific allow rules
+# - If any policy allows traffic, that traffic is permitted
+# - Policies cannot override or block traffic allowed by other policies
+#
+# Without this policy, all pods would have unrestricted network access (allow-all).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: openshift-kube-storage-version-migrator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
   - Egress
