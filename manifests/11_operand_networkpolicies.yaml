@@ -14,7 +14,9 @@ metadata:
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: migrator
   egress:
   - to:
     - namespaceSelector:
