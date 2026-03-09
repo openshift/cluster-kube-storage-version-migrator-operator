@@ -74,6 +74,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 			"kube-storage-version-migrator/namespace.yaml",
 			"kube-storage-version-migrator/serviceaccount.yaml",
 			"kube-storage-version-migrator/roles.yaml",
+			"kube-storage-version-migrator/networkpolicy-allow.yaml",
+			"kube-storage-version-migrator/networkpolicy-default-deny.yaml",
 		},
 		(&resourceapply.ClientHolder{}).WithKubernetes(kubeClient),
 		operatorClient,

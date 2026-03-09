@@ -1,71 +1,17 @@
----
-# Allow egress to DNS for the kube-storage-version-migrator-operator.
-# The operator needs DNS resolution to resolve service names and API endpoints.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-to-dns
-  namespace: openshift-kube-storage-version-migrator-operator
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
-spec:
-  podSelector:
-    matchLabels:
-      app: kube-storage-version-migrator-operator
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: openshift-dns
-      podSelector:
-        matchLabels:
-          dns.operator.openshift.io/daemonset-dns: default
-    ports:
-    - protocol: TCP
-      port: 5353
-    - protocol: UDP
-      port: 5353
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
-  policyTypes:
-  - Egress
----
-# Allow egress to the Kubernetes API server.
-# The kube-storage-version-migrator-operator needs to communicate with the API server to:
-# - Watch and update storage version migrator resources
-# - Manage the migrator deployment in the openshift-kube-storage-version-migrator namespace
-# - Update cluster operator status
-# - Watch CustomResourceDefinitions and trigger migrations
+# Network policy for the kube-storage-version-migrator-operator pod.
 #
-# Note: We allow all egress because the API server IP address and port can vary
-# depending on cluster configuration (external load balancer, internal service, etc.).
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-to-apiserver
-  namespace: openshift-kube-storage-version-migrator-operator
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
-spec:
-  podSelector:
-    matchLabels:
-      app: kube-storage-version-migrator-operator
-  egress:
-  - {}
-  policyTypes:
-  - Egress
----
-# Allow ingress to the metrics endpoint from Prometheus.
-# The kube-storage-version-migrator-operator exposes metrics on port 8443 (containerPort).
+# Egress:
+# - Allow all egress to support communication with the Kubernetes API server,
+#   whose IP address and port are not known at manifest time. This implicitly
+#   covers DNS resolution as well.
 #
-# This policy allows Prometheus (and other monitoring components) running in namespaces
-# with the host-network policy group label to scrape metrics from the operator.
+# Ingress:
+# - Allow ingress on port 8443 (metrics) so that Prometheus can scrape metrics
+#   from the operator.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-to-metrics
+  name: allow-operator
   namespace: openshift-kube-storage-version-migrator-operator
   annotations:
     include.release.openshift.io/self-managed-high-availability: "true"
@@ -77,29 +23,8 @@ spec:
   - ports:
     - protocol: TCP
       port: 8443
-  policyTypes:
-  - Ingress
----
-# Default-deny policy for the openshift-kube-storage-version-migrator-operator namespace.
-# This policy selects all pods in the namespace and enables default-deny for both
-# ingress and egress by specifying policyTypes without any allow rules.
-#
-# NetworkPolicies are additive (use OR logic):
-# - This policy enables default-deny for all pods
-# - Subsequent policies add specific allow rules
-# - If any policy allows traffic, that traffic is permitted
-# - Policies cannot override or block traffic allowed by other policies
-#
-# Without this policy, all pods would have unrestricted network access (allow-all).
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny
-  namespace: openshift-kube-storage-version-migrator-operator
-  annotations:
-    include.release.openshift.io/self-managed-high-availability: "true"
-spec:
-  podSelector: {}
+  egress:
+  - {}
   policyTypes:
   - Ingress
   - Egress
