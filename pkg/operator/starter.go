@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
@@ -104,6 +105,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		operatorClient,
 		versionRecorder,
 		cc.EventRecorder,
+		clock.RealClock{},
 	)
 
 	staticConditionsController := staticconditionscontroller.NewStaticConditionsController(
