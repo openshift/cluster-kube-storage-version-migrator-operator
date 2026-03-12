@@ -124,7 +124,7 @@ func setDesiredReplicas(infrastructureLister configv1listers.InfrastructureListe
 			if err != nil {
 				return err
 			}
-			replicas = int32(len(nodes))
+			replicas = max(int32(len(nodes)), 1)
 		}
 
 		deployment.Spec.Replicas = &replicas

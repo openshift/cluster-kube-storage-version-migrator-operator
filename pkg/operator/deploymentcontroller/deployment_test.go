@@ -175,6 +175,12 @@ func Test_setDesiredReplicas(t *testing.T) {
 			},
 			expectedReplicas: 2,
 		},
+		{
+			name:             "HighlyAvailable with no nodes defaults to 1",
+			topology:         configv1.HighlyAvailableTopologyMode,
+			nodes:            nil,
+			expectedReplicas: 1,
+		},
 	}
 
 	for _, tc := range testCases {
