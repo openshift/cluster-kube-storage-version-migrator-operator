@@ -22,7 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
@@ -81,22 +80,14 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		cc.EventRecorder,
 	)
 
-	nodeInformer := informers.NewSharedInformerFactoryWithOptions(
-		kubeClient, 10*time.Minute,
-		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-			options.LabelSelector = "node-role.kubernetes.io/control-plane"
-		}))
-
-	configInformers := configinformers.NewSharedInformerFactory(configClient, 10*time.Minute)
-
 	migratorDeploymentController := deploymentcontroller.NewMigratorDeploymentController(
 		kubeClient,
 		operatorClient,
 		kubeInformersForNamespaces,
-		nodeInformer.Core().V1().Nodes(),
-		configInformers.Config().V1().Infrastructures(),
 		cc.EventRecorder,
 	)
+
+	configInformers := configinformers.NewSharedInformerFactory(configClient, 10*time.Minute)
 
 	statusController := status.NewClusterOperatorStatusController(
 		"kube-storage-version-migrator",
@@ -130,7 +121,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	configInformers.Start(ctx.Done())
 	dynamicInformers.Start(ctx.Done())
 	kubeInformersForNamespaces.Start(ctx.Done())
-	nodeInformer.Start(ctx.Done())
 
 	go statusController.Run(ctx, 1)
 	go staticResourceController.Run(ctx, 1)
