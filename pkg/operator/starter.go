@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/clock"
 
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/bindata"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg"
@@ -75,6 +76,8 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 			"kube-storage-version-migrator/namespace.yaml",
 			"kube-storage-version-migrator/serviceaccount.yaml",
 			"kube-storage-version-migrator/roles.yaml",
+			"kube-storage-version-migrator/networkpolicy-allow.yaml",
+			"kube-storage-version-migrator/networkpolicy-default-deny.yaml",
 		},
 		(&resourceapply.ClientHolder{}).WithKubernetes(kubeClient),
 		operatorClient,
@@ -111,6 +114,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		operatorClient,
 		versionRecorder,
 		cc.EventRecorder,
+		clock.RealClock{},
 	)
 
 	staticConditionsController := staticconditionscontroller.NewStaticConditionsController(

@@ -1,0 +1,30 @@
+# Network policy for the kube-storage-version-migrator-operator pod.
+#
+# Egress:
+# - Allow all egress to support communication with the Kubernetes API server,
+#   whose IP address and port are not known at manifest time. This implicitly
+#   covers DNS resolution as well.
+#
+# Ingress:
+# - Allow ingress on port 8443 (metrics) so that Prometheus can scrape metrics
+#   from the operator.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-operator
+  namespace: openshift-kube-storage-version-migrator-operator
+  annotations:
+    include.release.openshift.io/self-managed-high-availability: "true"
+spec:
+  podSelector:
+    matchLabels:
+      app: kube-storage-version-migrator-operator
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8443
+  egress:
+  - {}
+  policyTypes:
+  - Ingress
+  - Egress
