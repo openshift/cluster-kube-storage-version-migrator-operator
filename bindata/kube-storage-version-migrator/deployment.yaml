@@ -7,7 +7,6 @@ metadata:
     app: migrator
 spec:
   replicas: 1
-  minReadySeconds: 30
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -32,14 +31,21 @@ spec:
       containers:
       - name: migrator
         image: ${IMAGE}
-        command: [ "/bin/bash", "-c"]
+        command:
+          - migrator
         args:
-          - |-
-            trap 'echo "Termination signal received, but ignored. Continuing..."; sleep infinity' TERM
-            migrator "$@" & wait $!
-          - bash
           - '--alsologtostderr'
+          - '--leader-election'
           - '--v=2'
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         terminationMessagePolicy: FallbackToLogsOnError
         resources:
             requests:
@@ -50,24 +56,6 @@ spec:
           capabilities:
             drop:
             - ALL
-          runAsUser: 1001
-      - name: graceful-termination
-        image: ${IMAGE}
-        command: [ "/bin/bash", "-c" ]
-        args:
-          - |-
-            trap 'echo "Gracefully sleeping for 25s to let another pod start..."; sleep 25; exit' EXIT
-            while true; do echo "Waiting for termination..."; sleep 3600 & wait $!; done
-        terminationMessagePolicy: FallbackToLogsOnError
-        resources:
-          requests:
-            cpu: 1m
-            memory: 1Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
           runAsUser: 1001
       priorityClassName: system-cluster-critical
       tolerations:
@@ -83,3 +71,15 @@ spec:
           effect: NoExecute
           tolerationSeconds: 120
       terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - migrator
