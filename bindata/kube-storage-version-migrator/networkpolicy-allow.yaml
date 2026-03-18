@@ -1,0 +1,19 @@
+# Network policy for the storage-version-migrator operand pods.
+#
+# Egress:
+# - Allow all egress to support communication with the Kubernetes API server,
+#   whose IP address and port are not known at manifest time. This implicitly
+#   covers DNS resolution as well.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-migrator
+  namespace: openshift-kube-storage-version-migrator
+spec:
+  podSelector:
+    matchLabels:
+      app: migrator
+  egress:
+  - {}
+  policyTypes:
+  - Egress
