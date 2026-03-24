@@ -67,7 +67,7 @@ func prepareOperatorTestsRegistry() (*oteextension.Registry, error) {
 	extension.AddSuite(oteextension.Suite{
 		Name: "openshift/cluster-kube-storage-version-migrator-operator/operator/parallel",
 		Qualifiers: []string{
-			`!name.contains("[Serial]")`,
+			`!name.contains("[Serial]") && !name.contains("[Disruptive]")`,
 		},
 	})
 

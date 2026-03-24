@@ -126,6 +126,10 @@ var _ = g.Describe("[sig-api-machinery] cluster-kube-storage-version-migrator-op
 		ctx := context.Background()
 		kubeClient := newKubeClient()
 
+		g.By("Creating a test-owned source namespace")
+		srcNS, nsCleanup := CreateTestNamespace(ctx, t, kubeClient, "np-deny-src")
+		defer nsCleanup()
+
 		g.By("Creating a server pod in the operand namespace")
 		serverLabels := map[string]string{"test": "np-ingress-deny"}
 		serverIPs, cleanup := CreateServerPod(ctx, t, kubeClient, pkg.TargetNamespace, "np-deny-server", serverLabels, 8080)
@@ -133,7 +137,7 @@ var _ = g.Describe("[sig-api-machinery] cluster-kube-storage-version-migrator-op
 
 		g.By("Verifying ingress from external namespace is denied")
 		clientLabels := map[string]string{"test": "np-ingress-deny-client"}
-		ExpectConnectivity(ctx, t, kubeClient, "default", clientLabels, serverIPs, 8080, false)
+		ExpectConnectivity(ctx, t, kubeClient, srcNS, clientLabels, serverIPs, 8080, false)
 	})
 
 	g.It("[NetworkPolicy][Serial][Disruptive] should restore operand NetworkPolicies after delete[Timeout:15m]", func() {
@@ -278,6 +282,10 @@ var _ = g.Describe("[sig-api-machinery] cluster-kube-storage-version-migrator-op
 		ctx := context.Background()
 		kubeClient := newKubeClient()
 
+		g.By("Creating a test-owned source namespace")
+		srcNS, nsCleanup := CreateTestNamespace(ctx, t, kubeClient, "np-ingress-src")
+		defer nsCleanup()
+
 		pods, err := kubeClient.CoreV1().Pods(pkg.OperatorNamespace).List(ctx, metav1.ListOptions{
 			LabelSelector: "app=kube-storage-version-migrator-operator",
 		})
@@ -285,8 +293,8 @@ var _ = g.Describe("[sig-api-machinery] cluster-kube-storage-version-migrator-op
 		o.Expect(pods.Items).NotTo(o.BeEmpty(), "operator pod should exist")
 		operatorPodIP := pods.Items[0].Status.PodIP
 
-		g.By("Testing ingress from any namespace to metrics port 8443")
+		g.By("Testing ingress from test namespace to metrics port 8443")
 		testLabels := map[string]string{"test": "ingress-test"}
-		ExpectConnectivity(ctx, t, kubeClient, "default", testLabels, []string{operatorPodIP}, 8443, true)
+		ExpectConnectivity(ctx, t, kubeClient, srcNS, testLabels, []string{operatorPodIP}, 8443, true)
 	})
 })

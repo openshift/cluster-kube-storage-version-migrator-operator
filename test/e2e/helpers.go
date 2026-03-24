@@ -1,7 +1,3 @@
-// Package networkpolicy provides reusable helpers for testing Kubernetes
-// NetworkPolicy enforcement.  The helpers are framework-agnostic: they accept
-// a testing.TB for logging and return errors so callers can use any test
-// framework (standard Go testing, Ginkgo, etc.).
 package e2e
 
 import (
@@ -15,28 +11,24 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
 
 const (
-	// DefaultAgnhostImage is the default agnhost image used for test pods.
 	DefaultAgnhostImage = "registry.k8s.io/e2e-test-images/agnhost:2.45"
 )
 
 // ----- IP helpers -----
 
-// IsIPv6 returns true if the given IP string is an IPv6 address.
 func IsIPv6(ip string) bool {
 	return net.ParseIP(ip) != nil && strings.Contains(ip, ":")
 }
 
-// FormatIPPort formats an IP:port pair, using brackets for IPv6 addresses
-// (e.g. "[::1]:8443").
 func FormatIPPort(ip string, port int32) string {
 	if IsIPv6(ip) {
 		return fmt.Sprintf("[%s]:%d", ip, port)
@@ -58,27 +50,9 @@ func PodIPs(pod *corev1.Pod) []string {
 	return ips
 }
 
-// ServiceClusterIPs returns all ClusterIPs for a service (dual-stack aware).
-func ServiceClusterIPs(svc *corev1.Service) []string {
-	if len(svc.Spec.ClusterIPs) > 0 {
-		return svc.Spec.ClusterIPs
-	}
-	if svc.Spec.ClusterIP != "" {
-		return []string{svc.Spec.ClusterIP}
-	}
-	return nil
-}
+// ----- Pod / namespace construction -----
 
-// ----- Pod construction -----
-
-// NetexecPod returns a Pod object running agnhost netexec on the given port.
-func NetexecPod(name, namespace string, labels map[string]string, port int32) *corev1.Pod {
-	return NetexecPodWithImage(name, namespace, labels, port, DefaultAgnhostImage)
-}
-
-// NetexecPodWithImage returns a Pod object running agnhost netexec with a
-// custom image.
-func NetexecPodWithImage(name, namespace string, labels map[string]string, port int32, image string) *corev1.Pod {
+func netexecPod(name, namespace string, labels map[string]string, port int32, image string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -112,26 +86,40 @@ func NetexecPodWithImage(name, namespace string, labels map[string]string, port 
 	}
 }
 
+// CreateTestNamespace creates a unique namespace for the test and returns its
+// name along with a cleanup function that deletes it.
+func CreateTestNamespace(ctx context.Context, t testing.TB, kubeClient kubernetes.Interface, prefix string) (string, func()) {
+	t.Helper()
+	name := fmt.Sprintf("%s-%s", prefix, rand.String(5))
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+	}
+	_, err := kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("failed to create test namespace %s: %v", name, err)
+	}
+	t.Logf("created test namespace %s", name)
+	return name, func() {
+		if delErr := kubeClient.CoreV1().Namespaces().Delete(context.Background(), name, metav1.DeleteOptions{}); delErr != nil {
+			t.Logf("warning: failed to delete test namespace %s: %v", name, delErr)
+		}
+	}
+}
+
 // CreateServerPod creates an agnhost netexec server pod in the given namespace,
 // waits for it to be Ready, and returns all its PodIPs along with a cleanup
 // function.
 func CreateServerPod(ctx context.Context, t testing.TB, kubeClient kubernetes.Interface, namespace, name string, labels map[string]string, port int32) ([]string, func()) {
-	return CreateServerPodWithImage(ctx, t, kubeClient, namespace, name, labels, port, DefaultAgnhostImage)
-}
-
-// CreateServerPodWithImage is like CreateServerPod but allows specifying a
-// custom agnhost image.
-func CreateServerPodWithImage(ctx context.Context, t testing.TB, kubeClient kubernetes.Interface, namespace, name string, labels map[string]string, port int32, image string) ([]string, func()) {
 	t.Helper()
 	t.Logf("creating server pod %s/%s port=%d labels=%v", namespace, name, port, labels)
 
-	pod := NetexecPodWithImage(name, namespace, labels, port, image)
+	pod := netexecPod(name, namespace, labels, port, DefaultAgnhostImage)
 	_, err := kubeClient.CoreV1().Pods(namespace).Create(ctx, pod, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create server pod %s/%s: %v", namespace, name, err)
 	}
 
-	if err := WaitForPodReady(ctx, kubeClient, namespace, name); err != nil {
+	if err := waitForPodReady(ctx, kubeClient, namespace, name); err != nil {
 		t.Fatalf("server pod %s/%s never became ready: %v", namespace, name, err)
 	}
 
@@ -158,12 +146,6 @@ func CreateServerPodWithImage(ctx context.Context, t testing.TB, kubeClient kube
 // namespace with the specified labels, attempts a TCP connection to
 // serverIP:port, and returns whether the connection succeeded.
 func RunConnectivityCheck(ctx context.Context, kubeClient kubernetes.Interface, namespace string, labels map[string]string, serverIP string, port int32) (bool, error) {
-	return RunConnectivityCheckWithImage(ctx, kubeClient, namespace, labels, serverIP, port, DefaultAgnhostImage)
-}
-
-// RunConnectivityCheckWithImage is like RunConnectivityCheck but allows
-// specifying a custom agnhost image.
-func RunConnectivityCheckWithImage(ctx context.Context, kubeClient kubernetes.Interface, namespace string, labels map[string]string, serverIP string, port int32, image string) (bool, error) {
 	name := fmt.Sprintf("np-client-%s", rand.String(5))
 
 	pod := &corev1.Pod{
@@ -182,7 +164,7 @@ func RunConnectivityCheckWithImage(ctx context.Context, kubeClient kubernetes.In
 			Containers: []corev1.Container{
 				{
 					Name:  "connect",
-					Image: image,
+					Image: DefaultAgnhostImage,
 					SecurityContext: &corev1.SecurityContext{
 						AllowPrivilegeEscalation: boolptr(false),
 						Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
@@ -209,7 +191,7 @@ func RunConnectivityCheckWithImage(ctx context.Context, kubeClient kubernetes.In
 		_ = kubeClient.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	}()
 
-	if err := WaitForPodCompletion(ctx, kubeClient, namespace, name); err != nil {
+	if err := waitForPodCompletion(ctx, kubeClient, namespace, name); err != nil {
 		return false, err
 	}
 	completed, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
@@ -245,8 +227,8 @@ func ExpectConnectivity(ctx context.Context, t testing.TB, kubeClient kubernetes
 }
 
 func pollConnectivity(ctx context.Context, kubeClient kubernetes.Interface, namespace string, clientLabels map[string]string, serverIP string, port int32, shouldSucceed bool, timeout time.Duration) error {
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(_ context.Context) (bool, error) {
-		succeeded, err := RunConnectivityCheck(ctx, kubeClient, namespace, clientLabels, serverIP, port)
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(pollCtx context.Context) (bool, error) {
+		succeeded, err := RunConnectivityCheck(pollCtx, kubeClient, namespace, clientLabels, serverIP, port)
 		if err != nil {
 			return false, err
 		}
@@ -254,88 +236,9 @@ func pollConnectivity(ctx context.Context, kubeClient kubernetes.Interface, name
 	})
 }
 
-// LogConnectivityBestEffort is like ExpectConnectivity but uses a shorter
-// timeout (30s) and only logs failures instead of failing the test. This is
-// useful when external factors (e.g. other namespaces' egress policies, mTLS)
-// can interfere with the check.
-func LogConnectivityBestEffort(ctx context.Context, t testing.TB, kubeClient kubernetes.Interface, namespace string, clientLabels map[string]string, serverIPs []string, port int32, shouldSucceed bool) {
-	t.Helper()
-	for _, ip := range serverIPs {
-		family := "IPv4"
-		if IsIPv6(ip) {
-			family = "IPv6"
-		}
-		t.Logf("checking %s connectivity (best-effort) %s -> %s expected=%t", family, namespace, FormatIPPort(ip, port), shouldSucceed)
-		if err := pollConnectivity(ctx, kubeClient, namespace, clientLabels, ip, port, shouldSucceed, 30*time.Second); err != nil {
-			t.Logf("connectivity (best-effort) %s -> %s expected=%t FAILED: %v", namespace, FormatIPPort(ip, port), shouldSucceed, err)
-		}
-	}
-}
+// ----- Policy inspection helpers -----
 
-// ----- NetworkPolicy construction helpers -----
-
-// DefaultDenyPolicy returns a NetworkPolicy that blocks all ingress and egress
-// for every pod in the given namespace.
-func DefaultDenyPolicy(name, namespace string) *networkingv1.NetworkPolicy {
-	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress},
-		},
-	}
-}
-
-// AllowIngressPolicy returns a NetworkPolicy that allows ingress to pods with
-// podLabels from pods with fromLabels on the specified port.
-func AllowIngressPolicy(name, namespace string, podLabels, fromLabels map[string]string, port int32) *networkingv1.NetworkPolicy {
-	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: podLabels},
-			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				{
-					From: []networkingv1.NetworkPolicyPeer{
-						{PodSelector: &metav1.LabelSelector{MatchLabels: fromLabels}},
-					},
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: &intstr.IntOrString{Type: intstr.Int, IntVal: port}, Protocol: protocolPtr(corev1.ProtocolTCP)},
-					},
-				},
-			},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-		},
-	}
-}
-
-// AllowEgressPolicy returns a NetworkPolicy that allows egress from pods with
-// podLabels to pods with toLabels on the specified port.
-func AllowEgressPolicy(name, namespace string, podLabels, toLabels map[string]string, port int32) *networkingv1.NetworkPolicy {
-	return &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: podLabels},
-			Egress: []networkingv1.NetworkPolicyEgressRule{
-				{
-					To: []networkingv1.NetworkPolicyPeer{
-						{PodSelector: &metav1.LabelSelector{MatchLabels: toLabels}},
-					},
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: &intstr.IntOrString{Type: intstr.Int, IntVal: port}, Protocol: protocolPtr(corev1.ProtocolTCP)},
-					},
-				},
-			},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeEgress},
-		},
-	}
-}
-
-// ----- Policy inspection helpers (pure functions, no test framework) -----
-
-// HasPort returns true if the given list of NetworkPolicy ports includes a port
-// matching the specified protocol and port number. A nil port field means "all
-// ports" and is treated as a match.
-func HasPort(ports []networkingv1.NetworkPolicyPort, protocol corev1.Protocol, port int32) bool {
+func hasPort(ports []networkingv1.NetworkPolicyPort, protocol corev1.Protocol, port int32) bool {
 	for _, p := range ports {
 		if p.Protocol != nil && *p.Protocol != protocol {
 			continue
@@ -347,22 +250,9 @@ func HasPort(ports []networkingv1.NetworkPolicyPort, protocol corev1.Protocol, p
 	return false
 }
 
-// HasPortInIngress returns true if any ingress rule contains the specified
-// protocol/port.
-func HasPortInIngress(rules []networkingv1.NetworkPolicyIngressRule, protocol corev1.Protocol, port int32) bool {
+func hasPortInIngress(rules []networkingv1.NetworkPolicyIngressRule, protocol corev1.Protocol, port int32) bool {
 	for _, rule := range rules {
-		if HasPort(rule.Ports, protocol, port) {
-			return true
-		}
-	}
-	return false
-}
-
-// HasPortInEgress returns true if any egress rule contains the specified
-// protocol/port.
-func HasPortInEgress(rules []networkingv1.NetworkPolicyEgressRule, protocol corev1.Protocol, port int32) bool {
-	for _, rule := range rules {
-		if HasPort(rule.Ports, protocol, port) {
+		if hasPort(rule.Ports, protocol, port) {
 			return true
 		}
 	}
@@ -376,72 +266,26 @@ func HasDefaultDeny(policies []networkingv1.NetworkPolicy) bool {
 		if len(policy.Spec.PodSelector.MatchLabels) != 0 || len(policy.Spec.PodSelector.MatchExpressions) != 0 {
 			continue
 		}
-		if HasPolicyTypes(policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress) {
+		hasIngress := false
+		hasEgress := false
+		for _, pt := range policy.Spec.PolicyTypes {
+			if pt == networkingv1.PolicyTypeIngress {
+				hasIngress = true
+			}
+			if pt == networkingv1.PolicyTypeEgress {
+				hasEgress = true
+			}
+		}
+		if hasIngress && hasEgress {
 			return true
 		}
 	}
 	return false
 }
 
-// HasPolicyTypes returns true if the given policyTypes list contains all of the
-// expected types.
-func HasPolicyTypes(policyTypes []networkingv1.PolicyType, expected ...networkingv1.PolicyType) bool {
-	expectedSet := map[networkingv1.PolicyType]struct{}{}
-	for _, typ := range expected {
-		expectedSet[typ] = struct{}{}
-	}
-	for _, typ := range policyTypes {
-		delete(expectedSet, typ)
-	}
-	return len(expectedSet) == 0
-}
-
-// HasEgressPortInNamespace returns true if any policy in the list has an egress
-// rule with the specified protocol/port.
-func HasEgressPortInNamespace(policies []networkingv1.NetworkPolicy, protocol corev1.Protocol, port int32) bool {
-	for _, policy := range policies {
-		if HasPortInEgress(policy.Spec.Egress, protocol, port) {
-			return true
-		}
-	}
-	return false
-}
-
-// HasUnrestrictedEgressInNamespace returns true if any policy in the list has
-// an egress rule with no port and no destination restrictions (i.e. allows all
-// egress).
-func HasUnrestrictedEgressInNamespace(policies []networkingv1.NetworkPolicy) bool {
-	for _, policy := range policies {
-		for _, rule := range policy.Spec.Egress {
-			if len(rule.Ports) == 0 && len(rule.To) == 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasIngressFromNamespace returns true if any ingress rule allows traffic from
-// the specified namespace on the given port (TCP).
-func HasIngressFromNamespace(rules []networkingv1.NetworkPolicyIngressRule, port int32, namespace string) bool {
+func hasIngressAllowAll(rules []networkingv1.NetworkPolicyIngressRule, port int32) bool {
 	for _, rule := range rules {
-		if !HasPort(rule.Ports, corev1.ProtocolTCP, port) {
-			continue
-		}
-		for _, peer := range rule.From {
-			if NamespaceSelectorMatchesNamespace(peer.NamespaceSelector, namespace) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasIngressAllowAll returns true if any ingress rule allows traffic from all
-// sources on the specified port.
-func HasIngressAllowAll(rules []networkingv1.NetworkPolicyIngressRule, port int32) bool {
-	for _, rule := range rules {
-		if !HasPort(rule.Ports, corev1.ProtocolTCP, port) {
+		if !hasPort(rule.Ports, corev1.ProtocolTCP, port) {
 			continue
 		}
 		if len(rule.From) == 0 {
@@ -451,195 +295,7 @@ func HasIngressAllowAll(rules []networkingv1.NetworkPolicyIngressRule, port int3
 	return false
 }
 
-// HasIngressFromPolicyGroup returns true if any ingress rule allows traffic
-// from namespaces with the given policy-group label key on the specified port.
-func HasIngressFromPolicyGroup(rules []networkingv1.NetworkPolicyIngressRule, port int32, policyGroupLabelKey string) bool {
-	for _, rule := range rules {
-		if !HasPort(rule.Ports, corev1.ProtocolTCP, port) {
-			continue
-		}
-		for _, peer := range rule.From {
-			if peer.NamespaceSelector == nil || peer.NamespaceSelector.MatchLabels == nil {
-				continue
-			}
-			if _, ok := peer.NamespaceSelector.MatchLabels[policyGroupLabelKey]; ok {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasEgressAllowAllTCP returns true if any egress rule allows all TCP traffic
-// (no destination restriction).
-func HasEgressAllowAllTCP(rules []networkingv1.NetworkPolicyEgressRule) bool {
-	for _, rule := range rules {
-		if len(rule.To) != 0 {
-			continue
-		}
-		if HasAnyTCPPort(rule.Ports) {
-			return true
-		}
-	}
-	return false
-}
-
-// HasAnyTCPPort returns true if the ports list is empty (all ports) or contains
-// at least one TCP port.
-func HasAnyTCPPort(ports []networkingv1.NetworkPolicyPort) bool {
-	if len(ports) == 0 {
-		return true
-	}
-	for _, p := range ports {
-		if p.Protocol != nil && *p.Protocol != corev1.ProtocolTCP {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
-// NamespaceSelectorMatchesNamespace returns true if the given label selector
-// matches the namespace by checking the "kubernetes.io/metadata.name" label in
-// both MatchLabels and MatchExpressions. Returns false when the selector is
-// nil (meaning no namespace selector was specified on the peer).
-func NamespaceSelectorMatchesNamespace(selector *metav1.LabelSelector, namespace string) bool {
-	if selector == nil {
-		return false
-	}
-	if selector.MatchLabels != nil {
-		if selector.MatchLabels["kubernetes.io/metadata.name"] == namespace {
-			return true
-		}
-	}
-	for _, expr := range selector.MatchExpressions {
-		if expr.Key != "kubernetes.io/metadata.name" {
-			continue
-		}
-		if expr.Operator != metav1.LabelSelectorOpIn {
-			continue
-		}
-		for _, value := range expr.Values {
-			if value == namespace {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// ----- Policy evaluation helpers (used in enforcement tests) -----
-
-// IngressAllowsFromNamespace returns true if the given NetworkPolicy's ingress
-// rules allow traffic from the specified namespace with the given pod labels on
-// the specified port.
-func IngressAllowsFromNamespace(policy *networkingv1.NetworkPolicy, namespace string, labels map[string]string, port int32) bool {
-	for _, rule := range policy.Spec.Ingress {
-		if !RuleAllowsPort(rule.Ports, port) {
-			continue
-		}
-		if len(rule.From) == 0 {
-			return true
-		}
-		for _, peer := range rule.From {
-			if peer.NamespaceSelector != nil {
-				if NamespaceSelectorMatchesNamespace(peer.NamespaceSelector, namespace) && PodMatch(peer.PodSelector, labels) {
-					return true
-				}
-				continue
-			}
-			if PodMatch(peer.PodSelector, labels) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// EgressAllowsNamespace returns true if the given NetworkPolicy's egress rules
-// allow traffic to the specified namespace on the specified port.
-func EgressAllowsNamespace(policy *networkingv1.NetworkPolicy, namespace string, port int32) bool {
-	for _, rule := range policy.Spec.Egress {
-		if !RuleAllowsPort(rule.Ports, port) {
-			continue
-		}
-		if len(rule.To) == 0 {
-			return true
-		}
-		for _, peer := range rule.To {
-			if peer.NamespaceSelector != nil && NamespaceSelectorMatchesNamespace(peer.NamespaceSelector, namespace) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// PodMatch returns true if the given label selector matches the provided
-// labels. Both MatchLabels and MatchExpressions are evaluated.
-func PodMatch(selector *metav1.LabelSelector, labels map[string]string) bool {
-	if selector == nil {
-		return true
-	}
-	for key, value := range selector.MatchLabels {
-		if labels[key] != value {
-			return false
-		}
-	}
-	for _, expr := range selector.MatchExpressions {
-		val, exists := labels[expr.Key]
-		switch expr.Operator {
-		case metav1.LabelSelectorOpIn:
-			if !matchesIn(val, exists, expr.Values) {
-				return false
-			}
-		case metav1.LabelSelectorOpNotIn:
-			if exists && matchesIn(val, exists, expr.Values) {
-				return false
-			}
-		case metav1.LabelSelectorOpExists:
-			if !exists {
-				return false
-			}
-		case metav1.LabelSelectorOpDoesNotExist:
-			if exists {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func matchesIn(val string, exists bool, values []string) bool {
-	if !exists {
-		return false
-	}
-	for _, v := range values {
-		if v == val {
-			return true
-		}
-	}
-	return false
-}
-
-// RuleAllowsPort returns true if the given list of policy ports includes the
-// specified port (or is empty, meaning all ports are allowed).
-func RuleAllowsPort(ports []networkingv1.NetworkPolicyPort, port int32) bool {
-	if len(ports) == 0 {
-		return true
-	}
-	for _, p := range ports {
-		if p.Port == nil {
-			return true
-		}
-		if p.Port.Type == intstr.Int && p.Port.IntVal == port {
-			return true
-		}
-	}
-	return false
-}
-
-// ----- Policy assertion helpers (use testing.TB) -----
+// ----- Policy assertion helpers -----
 
 // GetNetworkPolicy fetches a NetworkPolicy by namespace and name, failing the
 // test if it does not exist.
@@ -672,34 +328,12 @@ func RequireEmptyPodSelector(t testing.TB, policy *networkingv1.NetworkPolicy) {
 	}
 }
 
-// RequireDefaultDenyAll asserts that the policy is a default-deny-all: empty
-// podSelector with both Ingress and Egress policyTypes.
-func RequireDefaultDenyAll(t testing.TB, policy *networkingv1.NetworkPolicy) {
-	t.Helper()
-	if len(policy.Spec.PodSelector.MatchLabels) != 0 || len(policy.Spec.PodSelector.MatchExpressions) != 0 {
-		t.Fatalf("%s/%s: expected empty podSelector for default-deny, got matchLabels=%v matchExpressions=%v",
-			policy.Namespace, policy.Name, policy.Spec.PodSelector.MatchLabels, policy.Spec.PodSelector.MatchExpressions)
-	}
-	if !HasPolicyTypes(policy.Spec.PolicyTypes, networkingv1.PolicyTypeIngress, networkingv1.PolicyTypeEgress) {
-		t.Fatalf("%s/%s: expected both Ingress and Egress policyTypes, got %v", policy.Namespace, policy.Name, policy.Spec.PolicyTypes)
-	}
-}
-
 // RequireIngressPort asserts that the policy has an ingress rule with the
 // specified protocol and port.
 func RequireIngressPort(t testing.TB, policy *networkingv1.NetworkPolicy, protocol corev1.Protocol, port int32) {
 	t.Helper()
-	if !HasPortInIngress(policy.Spec.Ingress, protocol, port) {
+	if !hasPortInIngress(policy.Spec.Ingress, protocol, port) {
 		t.Fatalf("%s/%s: expected ingress port %s/%d", policy.Namespace, policy.Name, protocol, port)
-	}
-}
-
-// RequireEgressPort asserts that the policy has an egress rule with the
-// specified protocol and port.
-func RequireEgressPort(t testing.TB, policy *networkingv1.NetworkPolicy, protocol corev1.Protocol, port int32) {
-	t.Helper()
-	if !HasPortInEgress(policy.Spec.Egress, protocol, port) {
-		t.Fatalf("%s/%s: expected egress port %s/%d", policy.Namespace, policy.Name, protocol, port)
 	}
 }
 
@@ -718,34 +352,11 @@ func RequireUnrestrictedEgress(t testing.TB, policy *networkingv1.NetworkPolicy)
 	}
 }
 
-// RequireIngressFromNamespace asserts that the policy allows ingress from the
-// specified namespace on the given port.
-func RequireIngressFromNamespace(t testing.TB, policy *networkingv1.NetworkPolicy, port int32, namespace string) {
-	t.Helper()
-	if !HasIngressFromNamespace(policy.Spec.Ingress, port, namespace) {
-		t.Fatalf("%s/%s: expected ingress from namespace %s on port %d", policy.Namespace, policy.Name, namespace, port)
-	}
-}
-
-// RequireIngressFromNamespaceOrPolicyGroup asserts that the policy allows
-// ingress either from the specified namespace or from namespaces with the given
-// policy-group label on the specified port.
-func RequireIngressFromNamespaceOrPolicyGroup(t testing.TB, policy *networkingv1.NetworkPolicy, port int32, namespace, policyGroupLabelKey string) {
-	t.Helper()
-	if HasIngressFromNamespace(policy.Spec.Ingress, port, namespace) {
-		return
-	}
-	if HasIngressFromPolicyGroup(policy.Spec.Ingress, port, policyGroupLabelKey) {
-		return
-	}
-	t.Fatalf("%s/%s: expected ingress from namespace %s or policy-group %s on port %d", policy.Namespace, policy.Name, namespace, policyGroupLabelKey, port)
-}
-
 // RequireIngressAllowAll asserts that the policy allows ingress from any source
 // on the specified port.
 func RequireIngressAllowAll(t testing.TB, policy *networkingv1.NetworkPolicy, port int32) {
 	t.Helper()
-	if !HasIngressAllowAll(policy.Spec.Ingress, port) {
+	if !hasIngressAllowAll(policy.Spec.Ingress, port) {
 		t.Fatalf("%s/%s: expected ingress allow-all on port %d", policy.Namespace, policy.Name, port)
 	}
 }
@@ -764,9 +375,12 @@ func RestoreNetworkPolicy(t testing.TB, ctx context.Context, client kubernetes.I
 		t.Fatalf("failed to delete NetworkPolicy %s/%s: %v", namespace, name, err)
 	}
 	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
-		current, err := client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return false, nil
+		current, getErr := client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+		if getErr != nil {
+			if errors.IsNotFound(getErr) {
+				return false, nil
+			}
+			return false, getErr
 		}
 		return equality.Semantic.DeepEqual(expected.Spec, current.Spec), nil
 	})
@@ -790,7 +404,10 @@ func MutateAndRestoreNetworkPolicy(t testing.TB, ctx context.Context, client kub
 	}
 
 	err = wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
-		current := GetNetworkPolicy(t, ctx, client, namespace, name)
+		current, getErr := client.NetworkingV1().NetworkPolicies(namespace).Get(ctx, name, metav1.GetOptions{})
+		if getErr != nil {
+			return false, getErr
+		}
 		return equality.Semantic.DeepEqual(original.Spec, current.Spec), nil
 	})
 	if err != nil {
@@ -831,48 +448,11 @@ func LogNetworkPolicyDetails(t testing.TB, label string, policy *networkingv1.Ne
 	t.Logf("networkpolicy %s details:", label)
 	t.Logf("  podSelector=%v policyTypes=%v", policy.Spec.PodSelector.MatchLabels, policy.Spec.PolicyTypes)
 	for i, rule := range policy.Spec.Ingress {
-		t.Logf("  ingress[%d]: ports=%s from=%s", i, FormatPorts(rule.Ports), FormatPeers(rule.From))
+		t.Logf("  ingress[%d]: ports=%s from=%s", i, formatPorts(rule.Ports), formatPeers(rule.From))
 	}
 	for i, rule := range policy.Spec.Egress {
-		t.Logf("  egress[%d]: ports=%s to=%s", i, FormatPorts(rule.Ports), FormatPeers(rule.To))
+		t.Logf("  egress[%d]: ports=%s to=%s", i, formatPorts(rule.Ports), formatPeers(rule.To))
 	}
-}
-
-// LogIngressFromNamespaceOptional logs whether ingress from the specified
-// namespace is present on the given port (informational, does not fail).
-func LogIngressFromNamespaceOptional(t testing.TB, policy *networkingv1.NetworkPolicy, port int32, namespace string) {
-	t.Helper()
-	if HasIngressFromNamespace(policy.Spec.Ingress, port, namespace) {
-		t.Logf("networkpolicy %s/%s: ingress from namespace %s present on port %d", policy.Namespace, policy.Name, namespace, port)
-		return
-	}
-	t.Logf("networkpolicy %s/%s: no ingress from namespace %s on port %d", policy.Namespace, policy.Name, namespace, port)
-}
-
-// LogIngressHostNetworkOrAllowAll logs whether the policy has an allow-all
-// ingress rule or a host-network policy-group rule on the given port.
-func LogIngressHostNetworkOrAllowAll(t testing.TB, policy *networkingv1.NetworkPolicy, port int32) {
-	t.Helper()
-	if HasIngressAllowAll(policy.Spec.Ingress, port) {
-		t.Logf("networkpolicy %s/%s: ingress allow-all present on port %d", policy.Namespace, policy.Name, port)
-		return
-	}
-	if HasIngressFromPolicyGroup(policy.Spec.Ingress, port, "policy-group.network.openshift.io/host-network") {
-		t.Logf("networkpolicy %s/%s: ingress host-network policy-group present on port %d", policy.Namespace, policy.Name, port)
-		return
-	}
-	t.Logf("networkpolicy %s/%s: no ingress allow-all/host-network rule on port %d", policy.Namespace, policy.Name, port)
-}
-
-// LogEgressAllowAllTCP logs whether the policy has an egress allow-all TCP
-// rule.
-func LogEgressAllowAllTCP(t testing.TB, policy *networkingv1.NetworkPolicy) {
-	t.Helper()
-	if HasEgressAllowAllTCP(policy.Spec.Egress) {
-		t.Logf("networkpolicy %s/%s: egress allow-all TCP rule present", policy.Namespace, policy.Name)
-		return
-	}
-	t.Logf("networkpolicy %s/%s: no egress allow-all TCP rule", policy.Namespace, policy.Name)
 }
 
 // LogNetworkPolicyEvents searches for NetworkPolicy-related events in the
@@ -894,7 +474,7 @@ func LogEgressAllowAllTCP(t testing.TB, policy *networkingv1.NetworkPolicy) {
 func LogNetworkPolicyEvents(t testing.TB, ctx context.Context, client kubernetes.Interface, namespaces []string, policyName string) {
 	t.Helper()
 	found := false
-	_ = wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+	_ = wait.PollUntilContextTimeout(ctx, 5*time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		for _, namespace := range namespaces {
 			eventList, err := client.CoreV1().Events(namespace).List(ctx, metav1.ListOptions{})
 			if err != nil {
@@ -904,17 +484,12 @@ func LogNetworkPolicyEvents(t testing.TB, ctx context.Context, client kubernetes
 			for _, event := range eventList.Items {
 				isNPEvent := false
 
-				// Match by Reason prefix (e.g. NetworkPolicyCreated/Updated/Deleted)
 				if strings.HasPrefix(event.Reason, "NetworkPolicy") {
 					isNPEvent = true
 				}
-
-				// Match by InvolvedObject being a NetworkPolicy directly
 				if event.InvolvedObject.Kind == "NetworkPolicy" {
 					isNPEvent = true
 				}
-
-				// Match by Message containing the policy name
 				if policyName != "" && strings.Contains(event.Message, policyName) {
 					isNPEvent = true
 				}
@@ -941,8 +516,7 @@ func LogNetworkPolicyEvents(t testing.TB, ctx context.Context, client kubernetes
 
 // ----- Format helpers -----
 
-// FormatPorts returns a human-readable string of a port list.
-func FormatPorts(ports []networkingv1.NetworkPolicyPort) string {
+func formatPorts(ports []networkingv1.NetworkPolicyPort) string {
 	if len(ports) == 0 {
 		return "[]"
 	}
@@ -961,15 +535,14 @@ func FormatPorts(ports []networkingv1.NetworkPolicyPort) string {
 	return fmt.Sprintf("[%s]", strings.Join(out, ", "))
 }
 
-// FormatPeers returns a human-readable string of a peer list.
-func FormatPeers(peers []networkingv1.NetworkPolicyPeer) string {
+func formatPeers(peers []networkingv1.NetworkPolicyPeer) string {
 	if len(peers) == 0 {
 		return "[]"
 	}
 	out := make([]string, 0, len(peers))
 	for _, peer := range peers {
-		ns := FormatSelector(peer.NamespaceSelector)
-		pod := FormatSelector(peer.PodSelector)
+		ns := formatSelector(peer.NamespaceSelector)
+		pod := formatSelector(peer.PodSelector)
 		if ns == "" && pod == "" {
 			out = append(out, "{}")
 			continue
@@ -979,8 +552,7 @@ func FormatPeers(peers []networkingv1.NetworkPolicyPeer) string {
 	return fmt.Sprintf("[%s]", strings.Join(out, ", "))
 }
 
-// FormatSelector returns a human-readable string of a label selector.
-func FormatSelector(sel *metav1.LabelSelector) string {
+func formatSelector(sel *metav1.LabelSelector) string {
 	if sel == nil {
 		return ""
 	}
@@ -992,9 +564,7 @@ func FormatSelector(sel *metav1.LabelSelector) string {
 
 // ----- Wait helpers -----
 
-// WaitForPodReady waits up to 2 minutes for a pod to reach the Running phase
-// with a Ready condition.
-func WaitForPodReady(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string) error {
+func waitForPodReady(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string) error {
 	return wait.PollUntilContextTimeout(ctx, 2*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -1003,13 +573,16 @@ func WaitForPodReady(ctx context.Context, kubeClient kubernetes.Interface, names
 		if pod.Status.Phase != corev1.PodRunning {
 			return false, nil
 		}
-		return IsPodReady(pod), nil
+		for _, condition := range pod.Status.Conditions {
+			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+		return false, nil
 	})
 }
 
-// WaitForPodCompletion waits up to 2 minutes for a pod to reach Succeeded or
-// Failed phase.
-func WaitForPodCompletion(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string) error {
+func waitForPodCompletion(ctx context.Context, kubeClient kubernetes.Interface, namespace, name string) error {
 	return wait.PollUntilContextTimeout(ctx, 2*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		pod, err := kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -1019,54 +592,7 @@ func WaitForPodCompletion(ctx context.Context, kubeClient kubernetes.Interface, 
 	})
 }
 
-// WaitForPodsReadyByLabel waits up to 5 minutes for all pods matching the
-// label selector in the namespace to be ready.
-func WaitForPodsReadyByLabel(t testing.TB, ctx context.Context, client kubernetes.Interface, namespace, labelSelector string) {
-	t.Helper()
-	t.Logf("waiting for pods ready in %s with selector %s", namespace, labelSelector)
-	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-		if err != nil {
-			return false, err
-		}
-		if len(pods.Items) == 0 {
-			return false, nil
-		}
-		for _, pod := range pods.Items {
-			if !IsPodReady(&pod) {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
-	if err != nil {
-		t.Fatalf("timed out waiting for pods in %s with selector %s to be ready", namespace, labelSelector)
-	}
-}
-
-// IsPodReady returns true if the pod has a Ready condition set to True.
-func IsPodReady(pod *corev1.Pod) bool {
-	for _, condition := range pod.Status.Conditions {
-		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-			return true
-		}
-	}
-	return false
-}
-
 // ----- Utility helpers -----
-
-// BoolToAllowDeny returns "allow" if allow is true, "deny" otherwise.
-func BoolToAllowDeny(allow bool) string {
-	if allow {
-		return "allow"
-	}
-	return "deny"
-}
-
-func protocolPtr(protocol corev1.Protocol) *corev1.Protocol {
-	return &protocol
-}
 
 func boolptr(value bool) *bool {
 	return &value
