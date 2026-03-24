@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -9,19 +9,26 @@ import (
 
 	otecmd "github.com/openshift-eng/openshift-tests-extension/pkg/cmd"
 	oteextension "github.com/openshift-eng/openshift-tests-extension/pkg/extension"
+	oteginkgo "github.com/openshift-eng/openshift-tests-extension/pkg/ginkgo"
 	"github.com/openshift/cluster-kube-storage-version-migrator-operator/pkg/version"
 
 	"k8s.io/klog/v2"
 )
 
 func main() {
-	command := newOperatorTestCommand(context.Background())
-	code := cli.Run(command)
+	cmd, err := newOperatorTestCommand()
+	if err != nil {
+		klog.Fatal(err)
+	}
+	code := cli.Run(cmd)
 	os.Exit(code)
 }
 
-func newOperatorTestCommand(ctx context.Context) *cobra.Command {
-	registry := prepareOperatorTestsRegistry()
+func newOperatorTestCommand() (*cobra.Command, error) {
+	registry, err := prepareOperatorTestsRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare test registry: %w", err)
+	}
 
 	cmd := &cobra.Command{
 		Use:   "cluster-kube-storage-version-migrator-operator-tests-ext",
@@ -41,13 +48,35 @@ func newOperatorTestCommand(ctx context.Context) *cobra.Command {
 
 	cmd.AddCommand(otecmd.DefaultExtensionCommands(registry)...)
 
-	return cmd
+	return cmd, nil
 }
 
-func prepareOperatorTestsRegistry() *oteextension.Registry {
+func prepareOperatorTestsRegistry() (*oteextension.Registry, error) {
 	registry := oteextension.NewRegistry()
 	extension := oteextension.NewExtension("openshift", "payload", "cluster-kube-storage-version-migrator-operator")
 
+	extension.AddSuite(oteextension.Suite{
+		Name:        "openshift/cluster-kube-storage-version-migrator-operator/operator/disruptive",
+		Parallelism: 1,
+		Qualifiers: []string{
+			`name.contains("[Disruptive]") && name.contains("[Serial]")`,
+		},
+		ClusterStability: oteextension.ClusterStabilityDisruptive,
+	})
+
+	extension.AddSuite(oteextension.Suite{
+		Name: "openshift/cluster-kube-storage-version-migrator-operator/operator/parallel",
+		Qualifiers: []string{
+			`!name.contains("[Serial]")`,
+		},
+	})
+
+	specs, err := oteginkgo.BuildExtensionTestSpecsFromOpenShiftGinkgoSuite()
+	if err != nil {
+		return nil, fmt.Errorf("couldn't build extension test specs from ginkgo: %w", err)
+	}
+
+	extension.AddSpecs(specs)
 	registry.Register(extension)
-	return registry
+	return registry, nil
 }
