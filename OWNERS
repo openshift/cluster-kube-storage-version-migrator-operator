@@ -1,9 +1,7 @@
 reviewers:
-  - deads2k
+  - control-plane-approvers
   - sanchezl
-  - p0lyn0mial
 approvers:
-  - deads2k
-  - p0lyn0mial
+  - control-plane-approvers
   - sanchezl
 component: kube-storage-version-migrator
