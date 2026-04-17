@@ -50,6 +50,7 @@ func NewMigratorDeploymentController(
 		},
 		setOperandLogLevel,
 		setDesiredReplicas(infrastructureInformer.Lister(), nodeInformer.Lister()),
+		setControlPlaneNodeSelector(infrastructureInformer.Lister()),
 	)
 }
 
@@ -97,6 +98,26 @@ func setOperandLogLevel(spec *operatorv1.OperatorSpec, deployment *appsv1.Deploy
 	return nil
 }
 
+func setControlPlaneNodeSelector(infrastructureLister configv1listers.InfrastructureLister) deploymentcontroller.DeploymentHookFunc {
+	return func(spec *operatorv1.OperatorSpec, deployment *appsv1.Deployment) error {
+		infra, err := infrastructureLister.Get("cluster")
+		if err != nil {
+			return fmt.Errorf("failed to get infrastructure resource: %w", err)
+		}
+		// On HyperShift (External topology), no nodes carry control-plane
+		// labels in the guest cluster, so a nodeSelector would leave pods
+		// permanently Pending.
+		if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
+			return nil
+		}
+		if deployment.Spec.Template.Spec.NodeSelector == nil {
+			deployment.Spec.Template.Spec.NodeSelector = make(map[string]string)
+		}
+		deployment.Spec.Template.Spec.NodeSelector["node-role.kubernetes.io/control-plane"] = ""
+		return nil
+	}
+}
+
 func setDesiredReplicas(infrastructureLister configv1listers.InfrastructureLister, nodeLister corev1listers.NodeLister) deploymentcontroller.DeploymentHookFunc {
 	selector, err := labels.Parse("node-role.kubernetes.io/control-plane")
 	if err != nil {
@@ -116,10 +137,9 @@ func setDesiredReplicas(infrastructureLister configv1listers.InfrastructureListe
 			replicas = 2
 		} else {
 			// Count control-plane nodes to determine the replica count.
-			// We don't use deployment.Spec.Template.Spec.NodeSelector (as
-			// library-go's WithReplicasHook does) because the deployment
-			// does not have a nodeSelector. A previous attempt to add one
-			// broke HyperShift (https://issues.redhat.com/browse/OCPBUGS-18125).
+			// We count nodes directly rather than relying on the deployment's
+			// NodeSelector (as library-go's WithReplicasHook does) because the
+			// nodeSelector is only set conditionally (see setControlPlaneNodeSelector).
 			nodes, err := nodeLister.List(selector)
 			if err != nil {
 				return err
