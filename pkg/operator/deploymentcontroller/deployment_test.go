@@ -204,6 +204,45 @@ func Test_setDesiredReplicas(t *testing.T) {
 	}
 }
 
+func Test_setControlPlaneNodeSelector(t *testing.T) {
+	testCases := []struct {
+		name             string
+		topology         configv1.TopologyMode
+		expectedSelector map[string]string
+	}{
+		{
+			name:             "HighlyAvailable sets control-plane nodeSelector",
+			topology:         configv1.HighlyAvailableTopologyMode,
+			expectedSelector: map[string]string{"node-role.kubernetes.io/control-plane": ""},
+		},
+		{
+			name:             "SingleReplica sets control-plane nodeSelector",
+			topology:         configv1.SingleReplicaTopologyMode,
+			expectedSelector: map[string]string{"node-role.kubernetes.io/control-plane": ""},
+		},
+		{
+			name:             "External topology does not set nodeSelector",
+			topology:         configv1.ExternalTopologyMode,
+			expectedSelector: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			infraLister := fakeInfrastructureLister(newInfrastructure(tc.topology))
+			hook := setControlPlaneNodeSelector(infraLister)
+
+			deployment := &appsv1.Deployment{}
+			if err := hook(&operatorv1.OperatorSpec{}, deployment); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if diff := cmp.Diff(tc.expectedSelector, deployment.Spec.Template.Spec.NodeSelector); diff != "" {
+				t.Fatalf("unexpected nodeSelector (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 // Verify fakeNodeLister only returns nodes matching the control-plane selector.
 func Test_setDesiredReplicas_nodeFiltering(t *testing.T) {
 	// The node lister in setDesiredReplicas uses a label selector, but our fake

@@ -3,6 +3,7 @@ kind: Namespace
 metadata:
   name: openshift-kube-storage-version-migrator
   annotations:
+    openshift.io/node-selector: ""
     workload.openshift.io/allowed: "management"
   labels:
     openshift.io/cluster-monitoring: "true"
