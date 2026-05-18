@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: migrator
+  namespace: openshift-kube-storage-version-migrator
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: migrator
