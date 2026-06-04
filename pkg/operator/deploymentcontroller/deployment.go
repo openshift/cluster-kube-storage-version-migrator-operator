@@ -18,7 +18,9 @@ import (
 	"github.com/openshift/library-go/pkg/operator/v1helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corev1listers "k8s.io/client-go/listers/core/v1"
@@ -51,6 +53,7 @@ func NewMigratorDeploymentController(
 		setOperandLogLevel,
 		setDesiredReplicas(infrastructureInformer.Lister(), nodeInformer.Lister()),
 		setControlPlaneNodeSelector(infrastructureInformer.Lister()),
+		setSchedulingStrategy,
 	)
 }
 
@@ -130,24 +133,61 @@ func setDesiredReplicas(infrastructureLister configv1listers.InfrastructureListe
 		}
 
 		var replicas int32
-		if infra.Status.ControlPlaneTopology == configv1.ExternalTopologyMode {
-			// On HyperShift (External topology), control-plane nodes are not
-			// visible in the guest cluster, so we cannot count them. Default
-			// to 2 replicas for high availability.
+		switch infra.Status.ControlPlaneTopology {
+		case configv1.SingleReplicaTopologyMode:
+			replicas = 1
+		case configv1.DualReplicaTopologyMode, configv1.HighlyAvailableArbiterMode, configv1.ExternalTopologyMode:
 			replicas = 2
-		} else {
-			// Count control-plane nodes to determine the replica count.
-			// We count nodes directly rather than relying on the deployment's
-			// NodeSelector (as library-go's WithReplicasHook does) because the
-			// nodeSelector is only set conditionally (see setControlPlaneNodeSelector).
+		case configv1.HighlyAvailableTopologyMode:
+			replicas = 3
+		default:
 			nodes, err := nodeLister.List(selector)
 			if err != nil {
 				return err
 			}
-			replicas = max(int32(len(nodes)), 1)
+			replicas = min(max(int32(len(nodes)), 1), 3)
 		}
-
 		deployment.Spec.Replicas = &replicas
 		return nil
 	}
+}
+
+func setSchedulingStrategy(spec *operatorv1.OperatorSpec, deployment *appsv1.Deployment) error {
+	replicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		replicas = *deployment.Spec.Replicas
+	}
+
+	if deployment.Spec.Strategy.RollingUpdate == nil {
+		deployment.Spec.Strategy.RollingUpdate = &appsv1.RollingUpdateDeployment{}
+	}
+	maxUnavailable := intstr.FromInt32(max(replicas-1, 1))
+	maxSurge := intstr.FromInt32(1)
+	deployment.Spec.Strategy.RollingUpdate.MaxUnavailable = &maxUnavailable
+	deployment.Spec.Strategy.RollingUpdate.MaxSurge = &maxSurge
+
+	if replicas > 1 {
+		deployment.Spec.Template.Spec.Affinity = &corev1.Affinity{
+			PodAntiAffinity: &corev1.PodAntiAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+					{
+						TopologyKey: "kubernetes.io/hostname",
+						LabelSelector: &metav1.LabelSelector{
+							MatchExpressions: []metav1.LabelSelectorRequirement{
+								{
+									Key:      "app",
+									Operator: metav1.LabelSelectorOpIn,
+									Values:   []string{"migrator"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	} else {
+		deployment.Spec.Template.Spec.Affinity = nil
+	}
+
+	return nil
 }
