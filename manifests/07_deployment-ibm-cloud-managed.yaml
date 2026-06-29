@@ -28,6 +28,7 @@ spec:
       containers:
       - args:
         - --config=/var/run/configmaps/config/config.yaml
+        - --terminate-on-files=/var/run/configmaps/config/config.yaml
         command:
         - cluster-kube-storage-version-migrator-operator
         - start
