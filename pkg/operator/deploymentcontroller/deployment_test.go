@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -176,8 +177,54 @@ func Test_setDesiredReplicas(t *testing.T) {
 			expectedReplicas: 2,
 		},
 		{
-			name:             "HighlyAvailable with no nodes defaults to 1",
-			topology:         configv1.HighlyAvailableTopologyMode,
+			name:     "DualReplica with 2 control-plane nodes",
+			topology: configv1.DualReplicaTopologyMode,
+			nodes: []*corev1.Node{
+				newControlPlaneNode("master-0"),
+				newControlPlaneNode("master-1"),
+			},
+			expectedReplicas: 2,
+		},
+		{
+			name:     "HighlyAvailableArbiter with 3 nodes caps at 2",
+			topology: configv1.HighlyAvailableArbiterMode,
+			nodes: []*corev1.Node{
+				newControlPlaneNode("master-0"),
+				newControlPlaneNode("master-1"),
+				newControlPlaneNode("arbiter-0"),
+			},
+			expectedReplicas: 2,
+		},
+		{
+			name:     "HighlyAvailable with 5 nodes caps at 3",
+			topology: configv1.HighlyAvailableTopologyMode,
+			nodes: []*corev1.Node{
+				newControlPlaneNode("master-0"),
+				newControlPlaneNode("master-1"),
+				newControlPlaneNode("master-2"),
+				newControlPlaneNode("master-3"),
+				newControlPlaneNode("master-4"),
+			},
+			expectedReplicas: 3,
+		},
+		{
+			name:     "Unknown topology with 2 nodes gets 2 replicas",
+			topology: configv1.TopologyMode("SomeNewTopology"),
+			nodes: []*corev1.Node{
+				newControlPlaneNode("master-0"),
+				newControlPlaneNode("master-1"),
+			},
+			expectedReplicas: 2,
+		},
+		{
+			name:             "Unknown topology with 1 node gets 1 replica",
+			topology:         configv1.TopologyMode("SomeNewTopology"),
+			nodes:            []*corev1.Node{newControlPlaneNode("master-0")},
+			expectedReplicas: 1,
+		},
+		{
+			name:             "Unknown topology with 0 nodes gets 1 replica",
+			topology:         configv1.TopologyMode("SomeNewTopology"),
 			nodes:            nil,
 			expectedReplicas: 1,
 		},
@@ -277,4 +324,94 @@ func Test_setDesiredReplicas_nodeFiltering(t *testing.T) {
 	if *deployment.Spec.Replicas != 3 {
 		t.Fatalf("expected 3 replicas (control-plane nodes only), got %d", *deployment.Spec.Replicas)
 	}
+}
+
+func Test_setSchedulingStrategy(t *testing.T) {
+	requiredAntiAffinity := &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					TopologyKey: "kubernetes.io/hostname",
+					LabelSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      "app",
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"migrator"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name               string
+		replicas           *int32
+		expectedAffinity   *corev1.Affinity
+		expectedMaxUnavail intstr.IntOrString
+		expectedMaxSurge   intstr.IntOrString
+	}{
+		{
+			name:               "1 replica clears affinity",
+			replicas:           ptr(int32(1)),
+			expectedAffinity:   nil,
+			expectedMaxUnavail: intstr.FromInt32(1),
+			expectedMaxSurge:   intstr.FromInt32(1),
+		},
+		{
+			name:               "2 replicas sets required anti-affinity",
+			replicas:           ptr(int32(2)),
+			expectedAffinity:   requiredAntiAffinity,
+			expectedMaxUnavail: intstr.FromInt32(1),
+			expectedMaxSurge:   intstr.FromInt32(1),
+		},
+		{
+			name:               "3 replicas sets required anti-affinity with maxUnavailable 2",
+			replicas:           ptr(int32(3)),
+			expectedAffinity:   requiredAntiAffinity,
+			expectedMaxUnavail: intstr.FromInt32(2),
+			expectedMaxSurge:   intstr.FromInt32(1),
+		},
+		{
+			name:               "nil replicas treated as 1",
+			replicas:           nil,
+			expectedAffinity:   nil,
+			expectedMaxUnavail: intstr.FromInt32(1),
+			expectedMaxSurge:   intstr.FromInt32(1),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			deployment := &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Replicas: tc.replicas,
+					Strategy: appsv1.DeploymentStrategy{
+						Type:          appsv1.RollingUpdateDeploymentStrategyType,
+						RollingUpdate: &appsv1.RollingUpdateDeployment{},
+					},
+				},
+			}
+
+			if err := setSchedulingStrategy(&operatorv1.OperatorSpec{}, deployment); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if diff := cmp.Diff(tc.expectedAffinity, deployment.Spec.Template.Spec.Affinity); diff != "" {
+				t.Fatalf("unexpected affinity (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedMaxUnavail, *deployment.Spec.Strategy.RollingUpdate.MaxUnavailable); diff != "" {
+				t.Fatalf("unexpected maxUnavailable (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.expectedMaxSurge, *deployment.Spec.Strategy.RollingUpdate.MaxSurge); diff != "" {
+				t.Fatalf("unexpected maxSurge (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
