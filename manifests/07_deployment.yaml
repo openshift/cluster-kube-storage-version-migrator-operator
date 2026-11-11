@@ -38,7 +38,7 @@ spec:
           - "--terminate-on-files=/var/run/configmaps/config/config.yaml"
         resources:
           requests:
-            memory: 50Mi
+            memory: 75Mi
             cpu: 10m
         securityContext:
           allowPrivilegeEscalation: false
