@@ -22,6 +22,7 @@ spec:
         openshift.io/required-scc: nonroot-v2
       labels:
         app: migrator
+        kube-storage-version-migrator.openshift.io/component: migrator
     spec:
       securityContext:
         runAsNonRoot: true
