@@ -109,6 +109,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 			{Group: "migration.k8s.io", Resource: "storageversionmigrations"},
 			{Resource: "namespaces", Name: pkg.TargetNamespace},
 			{Resource: "namespaces", Name: pkg.OperatorNamespace},
+			{Group: "rbac.authorization.k8s.io", Resource: "clusterrolebindings", Name: "system:openshift:operator:kube-storage-version-migrator-operator"},
 		},
 		configClient.ConfigV1(),
 		configInformers.Config().V1().ClusterOperators(),
