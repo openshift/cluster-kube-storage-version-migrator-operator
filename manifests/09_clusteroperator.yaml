@@ -24,3 +24,6 @@ status:
     - group: ""
       name: openshift-kube-storage-version-migrator-operator
       resource: namespaces
+    - group: rbac.authorization.k8s.io
+      name: system:openshift:operator:kube-storage-version-migrator-operator
+      resource: clusterrolebindings
